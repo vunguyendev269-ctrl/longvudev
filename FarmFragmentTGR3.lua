@@ -1165,6 +1165,14 @@ local function startSession(mode, targetCFrame, followPart, followOffset, sessio
         local serverPos = root.Position       -- vi tri server tra ve (truoc khi ep)
         local proxyPos = data.proxy.Position
 
+        -- IMPORTANT: MOVE must measure the proxy's real remaining distance.
+        -- Without this, `remaining` stays 0 from the initialization above, so
+        -- travel immediately enters settle on the first frame and appears as
+        -- an instant teleport to the target. Keep FOLLOW/HOLD behavior intact.
+        if data.mode == "MOVE" then
+            remaining = (proxyPos - data.target.Position).Magnitude
+        end
+
         -- do bi keo: lech giua cho ta dat frame truoc va cho server tra ve
         local push = (serverPos - data.lastApplied).Magnitude
         data.maxDev = math.max(data.maxDev, push)
