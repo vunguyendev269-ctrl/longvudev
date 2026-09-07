@@ -605,34 +605,10 @@ local function ensureMarines()
 end
 
 local function isSea3()
-    -- Kiem tra PlaceId
     if SEA3_PLACE_IDS[game.PlaceId] then return true end
-
-    -- Kiem tra workspace MAP attribute
     local map = workspace:GetAttribute("MAP")
-    local mapStr = tostring(map or ""):lower()
-    if mapStr:find("sea3", 1, true) or mapStr:find("sea 3", 1, true) then return true end
-
-    -- Kiem tra CurrentLocation attribute cua player
-    local currentLocation = tostring(Player:GetAttribute("CurrentLocation") or ""):lower()
-    if currentLocation:find("sea of treat", 1, true)
-        or currentLocation:find("cake", 1, true)
-        or currentLocation:find("sea3", 1, true)
-        or currentLocation:find("sea 3", 1, true) then
-        return true
-    end
-
-    -- Kiem tra vi tri: neu dang o gan Cake Loaf area (Sea of Treats)
-    local root = State.Root
-    if root then
-        local pos = root.Position
-        -- Cake Loaf / Sea of Treats khu vuc gan (-2100, 85, -12130)
-        if (pos - Vector3.new(-2100, 85, -12130)).Magnitude < 3000 then
-            return true
-        end
-    end
-
-    return false
+    return tostring(map or ""):lower():find("sea3", 1, true) ~= nil
+        or tostring(map or ""):match("3") ~= nil
 end
 
 -- ============================================================================
@@ -947,17 +923,15 @@ local function resolveTarget(character, root, humanoid, target)
     parameters.IgnoreWater = true
     local result = workspace:Raycast(target.Position + Vector3.new(0, 45, 0), Vector3.new(0, -90, 0), parameters)
     if not result or result.Normal.Y < 0.55 then
-        -- Khong tim thay dat: su dung Y an toan (Y hien tai cua root hoac 0)
-        local safeY = math.max(root.Position.Y, 0)
+        -- Khong tim thay dat: fallback Y an toan (giu nguyen XZ, dung Y root)
         local rotation = target - target.Position
-        return CFrame.new(target.Position.X, safeY, target.Position.Z) * rotation
+        return CFrame.new(target.Position.X, root.Position.Y, target.Position.Z) * rotation
     end
     local difference = target.Position.Y - result.Position.Y
     if difference < -4 or difference > 28 then
-        -- Chenh lech qua lon: su dung Y an toan
-        local safeY = math.max(root.Position.Y, 0)
+        -- Chenh lech qua lon: fallback Y an toan
         local rotation = target - target.Position
-        return CFrame.new(target.Position.X, safeY, target.Position.Z) * rotation
+        return CFrame.new(target.Position.X, root.Position.Y, target.Position.Z) * rotation
     end
     local rotation = target - target.Position
     local height = result.Position.Y + humanoid.HipHeight + root.Size.Y * 0.5 + 0.45
