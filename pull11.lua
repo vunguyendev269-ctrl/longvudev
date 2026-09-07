@@ -193,60 +193,202 @@ else
     SetStatus("PlayerGui ready")
 end
 
-getgenv().Config = getgenv().Config or {
-    TEAM = Config["Team"] or "Pirates"
-}
+-- ============================================================
+-- TEAM SELECTOR - KATA COORDINATOR FLOW
+-- ============================================================
+
+getgenv().Config = getgenv().Config or {}
 local TeamConfig = getgenv().Config
-TeamConfig.TEAM = TeamConfig.TEAM or Config["Team"] or "Pirates"
-Config["Team"] = TeamConfig.TEAM
 
-repeat task.wait() until game:GetService("Players").LocalPlayer
-repeat task.wait() until game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+local function NormalizeTeam(value)
+    local key = tostring(value or "Pirates")
+        :lower()
+        :gsub("[^%a]", "")
 
-local function ChooseTeamByLargeButton()
-    if LocalPlayer.Team ~= nil then
-        SetStatus("Team already selected: " .. tostring(LocalPlayer.Team.Name))
+    if key == "marine" or key == "marines" then
+        return "Marines"
+    end
+
+    return "Pirates"
+end
+
+-- PullLeverConfig is the authority for this script.
+-- Stale globals from another script are not allowed to override it.
+local RequestedTeam =
+    NormalizeTeam(Config["Team"] or "Pirates")
+
+Config["Team"] = RequestedTeam
+TeamConfig.TEAM = RequestedTeam
+TeamConfig["Select Team"] = RequestedTeam
+
+-- Compatibility for Banana-style consumers.
+getgenv().Team =
+    RequestedTeam == "Marines"
+    and "Marine"
+    or "Pirate"
+
+repeat task.wait() until Players.LocalPlayer
+repeat task.wait() until Players.LocalPlayer:FindFirstChild("PlayerGui")
+
+-- Same principle as Kata: wait for CommF_ and force through SetTeam first.
+local TeamCommF =
+    ReplicatedStorage
+        :WaitForChild("Remotes")
+        :WaitForChild("CommF_")
+
+local function CurrentTeamName()
+    return LocalPlayer.Team
+        and tostring(LocalPlayer.Team.Name)
+        or "NONE"
+end
+
+local function ClickRequestedTeamButton()
+    local pg =
+        LocalPlayer:FindFirstChildOfClass("PlayerGui")
+
+    if not pg then
+        return false
+    end
+
+    local main =
+        pg:FindFirstChild("Main (minimal)")
+        or pg:FindFirstChild("Main")
+
+    if not main then
+        for _, child in ipairs(pg:GetChildren()) do
+            if tostring(child.Name):find("Main", 1, true) then
+                main = child
+                break
+            end
+        end
+    end
+
+    local choose =
+        main and main:FindFirstChild(
+            "ChooseTeam",
+            true
+        )
+
+    local container =
+        choose and choose:FindFirstChild(
+            "Container"
+        )
+
+    if not container then
+        return false
+    end
+
+    local teamFrame =
+        container:FindFirstChild(
+            RequestedTeam
+        )
+
+    if not teamFrame then
+        return false
+    end
+
+    -- Kata-style fallback: do not depend on a fixed .Frame.TextButton path.
+    if teamFrame:IsA("GuiButton") then
+        local ok = pcall(function()
+            if type(firesignal) == "function" then
+                firesignal(
+                    teamFrame.Activated
+                )
+            else
+                teamFrame:Activate()
+            end
+        end)
+
+        if ok then
+            return true
+        end
+    end
+
+    for _, obj in ipairs(
+        teamFrame:GetDescendants()
+    ) do
+        if obj:IsA("GuiButton") then
+            local ok = pcall(function()
+                if type(firesignal) == "function" then
+                    firesignal(
+                        obj.Activated
+                    )
+                else
+                    obj:Activate()
+                end
+            end)
+
+            if ok then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function EnsureTeam()
+    if CurrentTeamName()
+        == RequestedTeam
+    then
         return true
     end
 
-    SetStatus("Choosing team: " .. tostring(TeamConfig.TEAM))
+    SetStatus(
+        "Choosing "
+        .. RequestedTeam
+        .. "..."
+    )
 
-    repeat
-        task.wait()
-
-        for _, v in pairs(LocalPlayer.PlayerGui:GetChildren()) do
-            if string.find(v.Name, "Main") then
-                local ok, err = pcall(function()
-                    local button = v.ChooseTeam.Container[TeamConfig.TEAM].Frame.TextButton
-
-                    button.Size = UDim2.new(0, 10000, 0, 10000)
-                    button.Position = UDim2.new(-4, 0, -5, 0)
-                    button.BackgroundTransparency = 1
-
-                    task.wait(0.5)
-
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-                    task.wait(0.05)
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-
-                    task.wait(0.05)
-                end)
-
-                if not ok then
-
-                    SetStatus("Waiting ChooseTeam UI...")
-                    warn("[PullLever] ChooseTeam UI: " .. tostring(err))
-                end
-            end
+    -- Same cadence/structure as Kata Coordinator.
+    for _ = 1, 20 do
+        if CurrentTeamName()
+            == RequestedTeam
+        then
+            return true
         end
-    until LocalPlayer.Team ~= nil and game:IsLoaded()
 
-    SetStatus("Team selected: " .. tostring(LocalPlayer.Team.Name))
-    task.wait(3)
-    return true
+        pcall(function()
+            TeamCommF:InvokeServer(
+                "SetTeam",
+                RequestedTeam
+            )
+        end)
+
+        task.wait(0.35)
+
+        if CurrentTeamName()
+            == RequestedTeam
+        then
+            return true
+        end
+
+        pcall(
+            ClickRequestedTeamButton
+        )
+
+        task.wait(0.35)
+    end
+
+    return CurrentTeamName()
+        == RequestedTeam
 end
 
-ChooseTeamByLargeButton()
+-- Hard gate: do not let PullLever proceed until the requested team exists.
+while not EnsureTeam() do
+    SetStatus(
+        "Unable to choose "
+        .. RequestedTeam
+        .. " | retrying..."
+    )
+
+    task.wait(0.75)
+end
+
+SetStatus(
+    "Team selected: "
+    .. RequestedTeam
+)
 
 -- ============================================================
 -- CHARACTER BINDER
@@ -1239,30 +1381,21 @@ local function CaculateDistance(Origin, Destination)
 end
 
 -- ============================================================
--- TWEEN MODULE - TWEENLAB v1.1 PROXY CORE
+-- TWEEN MODULE - KATA COORDINATOR PROXY CORE
+-- ============================================================
+-- Fixed speed = 150, exactly like the Kata reference.
+-- No external speed override.
 --
--- Thay toan bo tween HumanoidRootPart truc tiep cu bang core proxy-part:
---   + TweenService CHI tween proxy Part anchored.
---   + PreSimulation ep HumanoidRootPart bam theo proxy.
---   + Gui velocity hop le bang BodyVelocity + AssemblyLinearVelocity.
---   + Khong resync proxy ve vi tri server khi bi rubber-band.
---   + Phase: travel -> settle -> release.
---   + Raycast noclip theo huong bay, restore CanCollide sau do.
---
--- API ben ngoai GIU NGUYEN:
---   Tween(...)
---   TweenTo(...)
---   CancelTween()
---   IsTweening()
---   MirageMovement.moveTo(...)
---   MirageMovement.cancel()
---   TweenToMirage(...)
---
--- PullLever can cac target RAW chinh xac (Blue Gear / Temple), nen phan nay
--- KHONG ground-snap target nhu GUI island cua TweenLab standalone.
+-- Proxy path:
+--   TweenService -> anchored proxy
+--   PreSimulation -> HumanoidRootPart follows proxy
+--   BodyVelocity + AssemblyLinearVelocity
+--   normal rubber-band does not pull proxy backwards
+--   AntiMover/Teleporting pauses movement and resumes from server position
+--   travel -> settle -> release
 -- ============================================================
 
-local SPEED = 325
+local TWEEN_SPEED = 150
 
 local TWEEN_CFG = {
     SettleMin       = 1.8,
@@ -1273,41 +1406,58 @@ local TWEEN_CFG = {
     SettlePull      = 4,
     ReleasePull     = 6,
     StuckSec        = 8,
+    AlreadyThere    = 6,
     StreamTimeout   = 5,
     SnapLogGap      = 5,
-    AlreadyThere    = 2,
 }
 
-local TweenSerial = 0
-local CurrentTween = nil
+local TweenMovementId = 0
+local CurrentTweenMovement = nil
 
-local function GetTweenSpeed()
-    return math.floor(math.clamp(
-        tonumber(getgenv().tweenspeed) or SPEED,
-        100,
-        500
-    ))
-end
-
--- Xoa proxy/stabilizer con sot neu execute lai script.
 pcall(function()
-    local stale = workspace:FindFirstChild("PullTweenProxy")
-    if stale then stale:Destroy() end
+    local stale =
+        workspace:FindFirstChild(
+            "PullKataMoveProxy"
+        )
 
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if root then
-        local old = root:FindFirstChild("PullTweenStabilizer")
-        if old then old:Destroy() end
+    if stale then
+        stale:Destroy()
+    end
+
+    local root0 =
+        LocalPlayer.Character
+        and LocalPlayer.Character:FindFirstChild(
+            "HumanoidRootPart"
+        )
+
+    if root0 then
+        local old =
+            root0:FindFirstChild(
+                "PullKataMoveStabilizer"
+            )
+
+        if old then
+            old:Destroy()
+        end
     end
 end)
 
-local function SetRootVelocity(root, velocity)
-    if not root or not root.Parent then return end
+local function TweenSetVelocity(
+    root,
+    velocity
+)
+    if not root
+        or not root.Parent
+    then
+        return
+    end
 
     pcall(function()
-        root.AssemblyLinearVelocity = velocity
-        root.AssemblyAngularVelocity = Vector3.zero
+        root.AssemblyLinearVelocity =
+            velocity
+
+        root.AssemblyAngularVelocity =
+            Vector3.zero
     end)
 
     pcall(function()
@@ -1316,33 +1466,32 @@ local function SetRootVelocity(root, velocity)
     end)
 end
 
-local function getCFrame(v)
-    if not v then return nil end
-    if typeof(v) == "CFrame" then return v end
-    if typeof(v) == "Vector3" then return CFrame.new(v) end
-    if typeof(v) ~= "Instance" then return nil end
-
-    if v:IsA("BasePart") then
-        return v.CFrame
+local function MovementLocked(char)
+    if not char then
+        return true
     end
 
-    if v:IsA("Model") then
-        local ok, cf = pcall(function()
-            return v:GetPivot()
+    if char:FindFirstChild(
+        "AntiMover"
+    ) then
+        return true
+    end
+
+    local ok, tagged =
+        pcall(function()
+            return CollectionService:HasTag(
+                char,
+                "Teleporting"
+            )
         end)
-        if ok and cf then return cf end
 
-        local root = v.PrimaryPart or v:FindFirstChild("HumanoidRootPart")
-        if root then return root.CFrame end
-    end
-
-    if v:IsA("CFrameValue") then return v.Value end
-    if v:IsA("Vector3Value") then return CFrame.new(v.Value) end
-
-    return nil
+    return ok
+        and tagged == true
 end
 
-local function RequestTweenStreaming(position)
+local function RequestTweenStreaming(
+    position
+)
     task.spawn(function()
         pcall(function()
             LocalPlayer:RequestStreamAroundAsync(
@@ -1353,26 +1502,47 @@ local function RequestTweenStreaming(position)
     end)
 end
 
--- Noclip cua TweenLab: raycast theo huong proxy dang bay.
--- Chi tat CanCollide vat can can thiet va tu restore.
-local function RestoreTweenNoclip(data, force)
-    if not data or not data.noclipParts then return end
+local function RestoreTweenNoclip(
+    data,
+    force
+)
+    if not data
+        or not data.noclipParts
+    then
+        return
+    end
 
     local now = os.clock()
 
-    for part, info in pairs(data.noclipParts) do
-        if not part or not part.Parent then
-            data.noclipParts[part] = nil
-        elseif force or now - info.seenAt > 0.28 then
+    for part, info in pairs(
+        data.noclipParts
+    ) do
+        if not part
+            or not part.Parent
+        then
+            data.noclipParts[part] =
+                nil
+
+        elseif force
+            or now - info.seenAt
+                > 0.28
+        then
             pcall(function()
-                part.CanCollide = info.canCollide
+                part.CanCollide =
+                    info.canCollide
             end)
-            data.noclipParts[part] = nil
+
+            data.noclipParts[part] =
+                nil
         end
     end
 end
 
-local function ApplyTweenNoclip(data, fromPosition, toPosition)
+local function ApplyTweenNoclip(
+    data,
+    fromPosition,
+    toPosition
+)
     if not data
         or not data.rayParams
         or not data.root
@@ -1381,23 +1551,38 @@ local function ApplyTweenNoclip(data, fromPosition, toPosition)
         return
     end
 
-    local motion = toPosition - fromPosition
-    local distance = motion.Magnitude
-    local now = os.clock()
+    local motion =
+        toPosition - fromPosition
+
+    local distance =
+        motion.Magnitude
+
+    local now =
+        os.clock()
 
     if distance <= 0.02 then
-        RestoreTweenNoclip(data, false)
+        RestoreTweenNoclip(
+            data,
+            false
+        )
         return
     end
 
-    local direction = motion.Unit
-    local up = Vector3.new(0, 1, 0)
+    local direction =
+        motion.Unit
 
-    local right = direction:Cross(up)
+    local up =
+        Vector3.new(0, 1, 0)
+
+    local right =
+        direction:Cross(up)
+
     if right.Magnitude < 0.05 then
-        right = Vector3.new(1, 0, 0)
+        right =
+            Vector3.new(1, 0, 0)
     else
-        right = right.Unit
+        right =
+            right.Unit
     end
 
     local offsets = {
@@ -1408,59 +1593,88 @@ local function ApplyTweenNoclip(data, fromPosition, toPosition)
         right * -1.75,
     }
 
-    local castVector = direction * (distance + 4.5)
+    local castVector =
+        direction
+        * (distance + 4.5)
 
-    for _, offset in ipairs(offsets) do
+    for _, offset in ipairs(
+        offsets
+    ) do
         for _ = 1, 3 do
-            local result = workspace:Raycast(
-                fromPosition + offset,
-                castVector,
-                data.rayParams
-            )
+            local result =
+                workspace:Raycast(
+                    fromPosition + offset,
+                    castVector,
+                    data.rayParams
+                )
 
             if not result then
                 break
             end
 
-            local part = result.Instance
+            local part =
+                result.Instance
 
             if not part
                 or not part:IsA("BasePart")
                 or not part.Anchored
                 or not part.CanCollide
-                or part:IsDescendantOf(data.character)
+                or part:IsDescendantOf(
+                    data.character
+                )
             then
                 break
             end
 
-            local normalY = math.abs(result.Normal.Y)
+            local normalY =
+                math.abs(
+                    result.Normal.Y
+                )
 
-            if normalY >= 0.72 and direction.Y <= 0.35 then
+            if normalY >= 0.72
+                and direction.Y <= 0.35
+            then
                 break
             end
 
-            local info = data.noclipParts[part]
+            local info =
+                data.noclipParts[part]
 
             if not info then
                 info = {
-                    canCollide = part.CanCollide,
+                    canCollide =
+                        part.CanCollide,
+
                     seenAt = now,
                 }
-                data.noclipParts[part] = info
-                data.noclipCount += 1
+
+                data.noclipParts[part] =
+                    info
             else
-                info.seenAt = now
+                info.seenAt =
+                    now
             end
 
-            part.CanCollide = false
+            part.CanCollide =
+                false
         end
     end
 
-    RestoreTweenNoclip(data, false)
+    RestoreTweenNoclip(
+        data,
+        false
+    )
 end
 
-local function CleanupTween(data)
-    if not data or data.cleaned then return end
+local function CleanupTweenMovement(
+    data
+)
+    if not data
+        or data.cleaned
+    then
+        return
+    end
+
     data.cleaned = true
 
     if data.tween then
@@ -1477,22 +1691,37 @@ local function CleanupTween(data)
         data.characterConnection:Disconnect()
     end
 
-    RestoreTweenNoclip(data, true)
+    RestoreTweenNoclip(
+        data,
+        true
+    )
 
-    if data.humanoid and data.humanoid.Parent then
+    if data.humanoid
+        and data.humanoid.Parent
+    then
         pcall(function()
-            data.humanoid.AutoRotate = data.autoRotate
+            data.humanoid.AutoRotate =
+                data.autoRotate
         end)
     end
 
-    for _, instance in ipairs(data.instances or {}) do
-        if instance and instance.Parent then
+    for _, instance in ipairs(
+        data.instances or {}
+    ) do
+        if instance
+            and instance.Parent
+        then
             instance:Destroy()
         end
     end
 
-    if data.root and data.root.Parent then
-        SetRootVelocity(data.root, Vector3.zero)
+    if data.root
+        and data.root.Parent
+    then
+        TweenSetVelocity(
+            data.root,
+            Vector3.zero
+        )
 
         if data.humanoid
             and data.humanoid.Parent
@@ -1505,66 +1734,67 @@ local function CleanupTween(data)
             end)
         end
     end
-
-    local total = os.clock() - data.t0
-
-    print(string.format(
-        "[PullTween] RUN %s | total=%.2fs dist=%.0f corr=%d snaps=%d retry=%d dev=%.1f clip=%d",
-        tostring(data.outcome or "done"),
-        total,
-        data.distance or 0,
-        data.corrections or 0,
-        data.snaps or 0,
-        data.releaseRetries or 0,
-        data.maxDev or 0,
-        data.noclipCount or 0
-    ))
 end
 
-local function CancelTween()
-    TweenSerial += 1
+local function ForceStopTweenMovement()
+    TweenMovementId += 1
 
-    local data = CurrentTween
-    CurrentTween = nil
+    local data =
+        CurrentTweenMovement
 
-    if data and not data.outcome then
-        data.outcome = "cancelled"
+    CurrentTweenMovement =
+        nil
+
+    if data
+        and not data.outcome
+    then
+        data.outcome =
+            "cancelled"
     end
 
-    CleanupTween(data)
+    CleanupTweenMovement(
+        data
+    )
 end
 
-local function FinishTween(serial, data)
-    if serial ~= TweenSerial
-        or CurrentTween ~= data
+local function FinishTweenMovement(
+    id,
+    data
+)
+    if id ~= TweenMovementId
+        or CurrentTweenMovement ~= data
         or data.finishing
     then
         return
     end
 
-    data.finishing = true
+    data.finishing =
+        true
 
     if not data.outcome then
-        data.outcome = "arrived"
+        data.outcome =
+            "arrived"
     end
 
-    CurrentTween = nil
-    CleanupTween(data)
+    CurrentTweenMovement =
+        nil
+
+    CleanupTweenMovement(
+        data
+    )
 end
 
-local function LaunchProxyTween(data)
-    if not data
-        or not data.proxy
-        or not data.proxy.Parent
-    then
-        return false
-    end
-
+local function LaunchTweenProxy(
+    data
+)
     local remaining =
-        (data.proxy.Position - data.target.Position).Magnitude
+        (
+            data.proxy.Position
+            - data.target.Position
+        ).Magnitude
 
     if remaining <= 1 then
-        return true
+        return
     end
 
     if data.tween then
@@ -1573,121 +1803,161 @@ local function LaunchProxyTween(data)
         end)
     end
 
-    local speed = GetTweenSpeed()
+    local tw =
+        TweenService:Create(
+            data.proxy,
 
-    local tw = TweenService:Create(
-        data.proxy,
-        TweenInfo.new(
-            math.max(remaining / speed, 0.05),
-            Enum.EasingStyle.Linear,
-            Enum.EasingDirection.Out
-        ),
-        {
-            CFrame = data.target
-        }
-    )
+            TweenInfo.new(
+                math.max(
+                    remaining
+                        / TWEEN_SPEED,
+                    0.05
+                ),
+
+                Enum.EasingStyle.Linear,
+                Enum.EasingDirection.Out
+            ),
+
+            {
+                CFrame =
+                    data.target
+            }
+        )
 
     data.tween = tw
-    data.tweenSpeed = speed
     tw:Play()
-
-    return true
 end
 
-local function StartProxyTween(targetCFrame, targetObject)
+local function StartTweenSession(
+    targetCFrame
+)
+    ForceStopTweenMovement()
     RefreshCharacter()
 
-    local character = LocalPlayer.Character
-    local humanoid = character
-        and character:FindFirstChildOfClass("Humanoid")
-    local root = character
-        and character:FindFirstChild("HumanoidRootPart")
+    local character =
+        LocalPlayer.Character
 
-    if not character
+    local root =
+        character
+        and character:FindFirstChild(
+            "HumanoidRootPart"
+        )
+
+    local humanoid =
+        character
+        and character:FindFirstChildOfClass(
+            "Humanoid"
+        )
+
+    if not root
         or not humanoid
         or humanoid.Health <= 0
-        or not root
-        or not root.Parent
+        or typeof(targetCFrame)
+            ~= "CFrame"
     then
-        CancelTween()
-        return false
+        return nil
     end
 
-    targetObject = targetObject or root
+    TweenMovementId += 1
 
-    -- PullLever hien tai chi tween nhan vat.
-    -- Giu tham so targetObject de API cu khong vo, nhung khong cho mot object
-    -- khac chiem core proxy movement.
-    if targetObject ~= root then
-        warn("[PullTween] targetObject khac HumanoidRootPart -> bo qua")
-        return false
-    end
+    local id =
+        TweenMovementId
 
-    local target = getCFrame(targetCFrame)
-    if not target then
-        return false
-    end
+    local target =
+        targetCFrame
 
-    local old = CurrentTween
-    if old
-        and not old.cleaned
-        and old.root == root
-        and (old.target.Position - target.Position).Magnitude <= 3
+    local distance =
+        (
+            root.Position
+            - target.Position
+        ).Magnitude
+
+    if distance
+        <= TWEEN_CFG.AlreadyThere
     then
-        return false
-    end
-
-    CancelTween()
-
-    TweenSerial += 1
-    local serial = TweenSerial
-    local t0 = os.clock()
-
-    local distance = (root.Position - target.Position).Magnitude
-
-    if distance <= TWEEN_CFG.AlreadyThere then
         return true
     end
 
-    RequestTweenStreaming(target.Position)
+    RequestTweenStreaming(
+        target.Position
+    )
 
-    local proxy = Instance.new("Part")
-    proxy.Name = "PullTweenProxy"
+    local proxy =
+        Instance.new("Part")
+
+    proxy.Name =
+        "PullKataMoveProxy"
+
     proxy.Anchored = true
     proxy.CanCollide = false
     proxy.CanQuery = false
     proxy.CanTouch = false
     proxy.Transparency = 1
-    proxy.Size = Vector3.new(1, 1, 1)
-    proxy.CFrame = root.CFrame
-    proxy.Parent = workspace
+    proxy.Size =
+        Vector3.new(1, 1, 1)
 
-    local stabilizer = Instance.new("BodyVelocity")
-    stabilizer.Name = "PullTweenStabilizer"
-    stabilizer.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-    stabilizer.P = 1000000
-    stabilizer.Velocity = Vector3.zero
-    stabilizer.Parent = root
+    proxy.CFrame =
+        root.CFrame
 
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    proxy.Parent =
+        workspace
+
+    local stabilizer =
+        Instance.new(
+            "BodyVelocity"
+        )
+
+    stabilizer.Name =
+        "PullKataMoveStabilizer"
+
+    stabilizer.MaxForce =
+        Vector3.new(
+            1e9,
+            1e9,
+            1e9
+        )
+
+    stabilizer.P =
+        1000000
+
+    stabilizer.Velocity =
+        Vector3.zero
+
+    stabilizer.Parent =
+        root
+
+    local rayParams =
+        RaycastParams.new()
+
+    rayParams.FilterType =
+        Enum.RaycastFilterType.Exclude
+
     rayParams.FilterDescendantsInstances = {
         character,
         proxy,
     }
-    rayParams.IgnoreWater = true
+
+    rayParams.IgnoreWater =
+        true
 
     pcall(function()
-        rayParams.RespectCanCollide = true
+        rayParams.RespectCanCollide =
+            true
     end)
 
-    local rotation = target - target.Position
+    local rotation =
+        target
+        - target.Position
+
+    local now =
+        os.clock()
 
     local data = {
-        serial = serial,
+        id = id,
+
         character = character,
-        humanoid = humanoid,
         root = root,
+        humanoid = humanoid,
 
         proxy = proxy,
         stabilizer = stabilizer,
@@ -1696,328 +1966,570 @@ local function StartProxyTween(targetCFrame, targetObject)
         target = target,
         rotation = rotation,
 
-        t0 = t0,
+        t0 = now,
         distance = distance,
 
         phase = "travel",
-        phaseStartedAt = t0,
-        lastCorrectionAt = t0,
+        phaseStartedAt = now,
+        lastCorrectionAt = now,
 
-        lastApplied = root.Position,
+        lastApplied =
+            root.Position,
 
         noclipParts = {},
-        noclipCount = 0,
 
         corrections = 0,
         releaseRetries = 0,
         snaps = 0,
         maxDev = 0,
 
-        bestRemaining = distance,
-        lastRemaining = distance,
-        lastNetAt = t0,
-        lastSnapLogAt = 0,
+        bestRemaining =
+            distance,
 
-        autoRotate = humanoid.AutoRotate,
+        lastNetAt =
+            now,
+
+        lastSnapLogAt =
+            0,
+
+        lastRemaining =
+            distance,
+
+        lockedSeen =
+            false,
+
+        autoRotate =
+            humanoid.AutoRotate,
+
         instances = {
             proxy,
             stabilizer,
         },
     }
 
-    CurrentTween = data
+    CurrentTweenMovement =
+        data
 
-    humanoid.AutoRotate = false
-    humanoid.Sit = false
+    humanoid.AutoRotate =
+        false
 
-    LaunchProxyTween(data)
+    humanoid.Sit =
+        false
+
+    LaunchTweenProxy(
+        data
+    )
 
     print(string.format(
         "[PullTween] START dist=%.0f speed=%d",
         distance,
-        GetTweenSpeed()
+        TWEEN_SPEED
     ))
 
     data.characterConnection =
-        LocalPlayer.CharacterAdded:Connect(function()
-            if serial == TweenSerial
-                and CurrentTween == data
-            then
-                CancelTween()
+        LocalPlayer.CharacterAdded:Connect(
+            function()
+                if id
+                        == TweenMovementId
+                    and CurrentTweenMovement
+                        == data
+                then
+                    ForceStopTweenMovement()
+                end
             end
-        end)
+        )
 
     data.stepConnection =
-        RunService.PreSimulation:Connect(function(dt)
-            if serial ~= TweenSerial
-                or CurrentTween ~= data
-                or data.cleaned
-            then
-                return
-            end
-
-            if not data.root
-                or not data.root.Parent
-                or not data.humanoid
-                or data.humanoid.Health <= 0
-                or not data.proxy
-                or not data.proxy.Parent
-            then
-                CancelTween()
-                return
-            end
-
-            dt = math.clamp(dt or 0.016, 0.001, 0.1)
-
-            local now = os.clock()
-            local speed = GetTweenSpeed()
-
-            -- Neu user doi getgenv().tweenspeed giua duong, tao lai tween proxy
-            -- tu vi tri hien tai, giong tinh nang doi speed cua TweenLab.
-            if data.phase == "travel"
-                and tonumber(data.tweenSpeed) ~= speed
-            then
-                LaunchProxyTween(data)
-            end
-
-            local serverPos = data.root.Position
-            local proxyPos = data.proxy.Position
-
-            -- Day la FIX quan trong cua TweenLab v1.1:
-            -- server keo root lai KHONG duoc resync proxy ve serverPos.
-            local push =
-                (serverPos - data.lastApplied).Magnitude
-
-            data.maxDev = math.max(
-                data.maxDev,
-                push
-            )
-
-            if push > TWEEN_CFG.PushSnap then
-                data.snaps += 1
-
-                if now - data.lastSnapLogAt
-                    >= TWEEN_CFG.SnapLogGap
+        RunService.PreSimulation:Connect(
+            function(dt)
+                if id
+                        ~= TweenMovementId
+                    or CurrentTweenMovement
+                        ~= data
+                    or data.cleaned
                 then
-                    data.lastSnapLogAt = now
-
-                    print(string.format(
-                        "[PullTween] WARN server pull %.0f studs (snap %d) - keep proxy path",
-                        push,
-                        data.snaps
-                    ))
-                end
-            end
-
-            ApplyTweenNoclip(
-                data,
-                serverPos,
-                proxyPos
-            )
-
-            local velocity = Vector3.zero
-
-            if dt > 0 then
-                velocity =
-                    (proxyPos - data.lastApplied) / dt
-
-                local maxVelocity = speed * 1.03
-
-                if velocity.Magnitude > maxVelocity then
-                    velocity =
-                        velocity.Unit * maxVelocity
-                end
-            end
-
-            if data.stabilizer
-                and data.stabilizer.Parent
-            then
-                data.stabilizer.Velocity =
-                    data.phase == "travel"
-                    and velocity
-                    or Vector3.zero
-            end
-
-            -- Cot loi TweenLab:
-            -- proxy di bang TweenService, nhan vat bam proxy moi PreSimulation.
-            data.root.CFrame =
-                CFrame.new(proxyPos) * data.rotation
-
-            SetRootVelocity(
-                data.root,
-                velocity
-            )
-
-            data.lastApplied = proxyPos
-
-            local remaining =
-                (proxyPos - data.target.Position).Magnitude
-
-            local srvOff =
-                (serverPos - data.target.Position).Magnitude
-
-            data.lastRemaining = remaining
-
-            local quietFor =
-                now - data.lastCorrectionAt
-
-            local settleNeed = math.min(
-                TWEEN_CFG.SettleMin
-                    + data.releaseRetries * 1.25,
-                7
-            )
-
-            local quietNeed = math.min(
-                TWEEN_CFG.QuietNeed
-                    + data.releaseRetries * 1.1,
-                6
-            )
-
-            if data.phase == "travel" then
-                if remaining <= 1.5 then
-                    data.phase = "settle"
-                    data.phaseStartedAt = now
-                    data.lastCorrectionAt = now
-
-                    if data.tween then
-                        pcall(function()
-                            data.tween:Cancel()
-                        end)
-                    end
-
-                    data.proxy.CFrame =
-                        data.target
-
-                    SetRootVelocity(
-                        data.root,
-                        Vector3.zero
-                    )
-                else
-                    if push > TWEEN_CFG.PushSnap
-                        and now - data.lastCorrectionAt > 0.5
-                    then
-                        data.corrections += 1
-                        data.lastCorrectionAt = now
-                    end
-
-                    if remaining
-                        < data.bestRemaining - 3
-                    then
-                        data.bestRemaining = remaining
-                        data.lastNetAt = now
-
-                    elseif now - data.lastNetAt
-                        > TWEEN_CFG.StuckSec
-                    then
-                        data.outcome = "stuck"
-
-                        print(string.format(
-                            "[PullTween] WARN stuck %.1fs | rem=%.0f",
-                            now - data.lastNetAt,
-                            remaining
-                        ))
-
-                        FinishTween(
-                            serial,
-                            data
-                        )
-                        return
-                    end
-                end
-
-            elseif data.phase == "settle" then
-                data.root.CFrame =
-                    data.target
-
-                SetRootVelocity(
-                    data.root,
-                    Vector3.zero
-                )
-
-                if srvOff
-                    > TWEEN_CFG.SettlePull
-                then
-                    data.lastCorrectionAt = now
-                end
-
-                if quietFor >= quietNeed
-                    and now - data.phaseStartedAt
-                        >= settleNeed
-                then
-                    data.phase = "release"
-                    data.phaseStartedAt = now
-                end
-
-            elseif data.phase == "release" then
-                if srvOff
-                    > TWEEN_CFG.ReleasePull
-                then
-                    data.releaseRetries += 1
-
-                    if data.releaseRetries
-                        > TWEEN_CFG.MaxReleaseRetry
-                    then
-                        data.outcome =
-                            "release-fail"
-
-                        FinishTween(
-                            serial,
-                            data
-                        )
-                        return
-                    end
-
-                    data.phase = "settle"
-                    data.phaseStartedAt = now
-                    data.lastCorrectionAt = now
-
-                    data.proxy.CFrame =
-                        data.target
-
-                    data.root.CFrame =
-                        data.target
-
-                elseif now - data.phaseStartedAt
-                    >= TWEEN_CFG.ReleaseConfirm
-                then
-                    FinishTween(
-                        serial,
-                        data
-                    )
                     return
                 end
-            end
-        end)
 
-    return false
+                if not root
+                    or not root.Parent
+                    or not humanoid
+                    or humanoid.Health <= 0
+                    or not data.proxy
+                    or not data.proxy.Parent
+                then
+                    ForceStopTweenMovement()
+                    return
+                end
+
+                dt =
+                    math.clamp(
+                        dt or 0.016,
+                        0.001,
+                        0.1
+                    )
+
+                local frameNow =
+                    os.clock()
+
+                humanoid.Sit =
+                    false
+
+                -- Real game teleport lock: do not fight it.
+                if MovementLocked(
+                    character
+                ) then
+                    if not data.lockedSeen then
+                        data.lockedSeen =
+                            true
+
+                        if data.tween then
+                            pcall(function()
+                                data.tween:Cancel()
+                            end)
+                        end
+                    end
+
+                    TweenSetVelocity(
+                        root,
+                        Vector3.zero
+                    )
+
+                    return
+                end
+
+                -- Resume after the game owns a teleport.
+                if data.lockedSeen then
+                    data.lockedSeen =
+                        false
+
+                    local newPos =
+                        root.Position
+
+                    data.proxy.CFrame =
+                        CFrame.new(newPos)
+                        * data.rotation
+
+                    data.lastApplied =
+                        newPos
+
+                    data.bestRemaining =
+                        (
+                            newPos
+                            - data.target.Position
+                        ).Magnitude
+
+                    data.lastNetAt =
+                        frameNow
+
+                    LaunchTweenProxy(
+                        data
+                    )
+                end
+
+                local serverPos =
+                    root.Position
+
+                local proxyPos =
+                    data.proxy.Position
+
+                -- Critical fix: real proxy remaining distance.
+                local remaining =
+                    (
+                        proxyPos
+                        - data.target.Position
+                    ).Magnitude
+
+                local push =
+                    (
+                        serverPos
+                        - data.lastApplied
+                    ).Magnitude
+
+                data.maxDev =
+                    math.max(
+                        data.maxDev,
+                        push
+                    )
+
+                if push
+                    > TWEEN_CFG.PushSnap
+                then
+                    data.snaps += 1
+
+                    if frameNow
+                        - data.lastSnapLogAt
+                        >= TWEEN_CFG.SnapLogGap
+                    then
+                        data.lastSnapLogAt =
+                            frameNow
+
+                        print(string.format(
+                            "[PullTween] WARN server pull %.0f studs (snap %d) - keep proxy",
+                            push,
+                            data.snaps
+                        ))
+                    end
+                end
+
+                ApplyTweenNoclip(
+                    data,
+                    serverPos,
+                    proxyPos
+                )
+
+                local velocity =
+                    Vector3.zero
+
+                if dt > 0 then
+                    velocity =
+                        (
+                            proxyPos
+                            - data.lastApplied
+                        ) / dt
+
+                    local maxVelocity =
+                        TWEEN_SPEED * 1.03
+
+                    if velocity.Magnitude
+                        > maxVelocity
+                    then
+                        velocity =
+                            velocity.Unit
+                            * maxVelocity
+                    end
+                end
+
+                if stabilizer
+                    and stabilizer.Parent
+                then
+                    stabilizer.Velocity =
+                        data.phase
+                            == "travel"
+                        and velocity
+                        or Vector3.zero
+                end
+
+                root.CFrame =
+                    CFrame.new(
+                        proxyPos
+                    )
+                    * data.rotation
+
+                TweenSetVelocity(
+                    root,
+                    velocity
+                )
+
+                data.lastApplied =
+                    proxyPos
+
+                data.lastRemaining =
+                    remaining
+
+                local srvOff =
+                    (
+                        serverPos
+                        - data.target.Position
+                    ).Magnitude
+
+                local quietFor =
+                    frameNow
+                    - data.lastCorrectionAt
+
+                local settleNeed =
+                    math.min(
+                        TWEEN_CFG.SettleMin
+                            + data.releaseRetries
+                                * 1.25,
+                        7
+                    )
+
+                local quietNeed =
+                    math.min(
+                        TWEEN_CFG.QuietNeed
+                            + data.releaseRetries
+                                * 1.1,
+                        6
+                    )
+
+                if data.phase
+                    == "travel"
+                then
+                    if remaining <= 1.5 then
+                        data.phase =
+                            "settle"
+
+                        data.phaseStartedAt =
+                            frameNow
+
+                        data.lastCorrectionAt =
+                            frameNow
+
+                        if data.tween then
+                            pcall(function()
+                                data.tween:Cancel()
+                            end)
+                        end
+
+                        data.proxy.CFrame =
+                            data.target
+
+                        TweenSetVelocity(
+                            root,
+                            Vector3.zero
+                        )
+                    else
+                        if push
+                                > TWEEN_CFG.PushSnap
+                            and frameNow
+                                - data.lastCorrectionAt
+                                > 0.5
+                        then
+                            data.corrections += 1
+
+                            data.lastCorrectionAt =
+                                frameNow
+                        end
+
+                        if remaining
+                            < data.bestRemaining
+                                - 3
+                        then
+                            data.bestRemaining =
+                                remaining
+
+                            data.lastNetAt =
+                                frameNow
+
+                        elseif frameNow
+                            - data.lastNetAt
+                            > TWEEN_CFG.StuckSec
+                        then
+                            data.outcome =
+                                "stuck"
+
+                            FinishTweenMovement(
+                                id,
+                                data
+                            )
+
+                            return
+                        end
+                    end
+
+                elseif data.phase
+                    == "settle"
+                then
+                    root.CFrame =
+                        data.target
+
+                    TweenSetVelocity(
+                        root,
+                        Vector3.zero
+                    )
+
+                    if srvOff
+                        > TWEEN_CFG.SettlePull
+                    then
+                        data.lastCorrectionAt =
+                            frameNow
+                    end
+
+                    if quietFor
+                            >= quietNeed
+                        and frameNow
+                            - data.phaseStartedAt
+                            >= settleNeed
+                    then
+                        data.phase =
+                            "release"
+
+                        data.phaseStartedAt =
+                            frameNow
+                    end
+
+                elseif data.phase
+                    == "release"
+                then
+                    if srvOff
+                        > TWEEN_CFG.ReleasePull
+                    then
+                        data.releaseRetries += 1
+
+                        if data.releaseRetries
+                            > TWEEN_CFG.MaxReleaseRetry
+                        then
+                            data.outcome =
+                                "release-fail"
+
+                            FinishTweenMovement(
+                                id,
+                                data
+                            )
+
+                            return
+                        end
+
+                        data.phase =
+                            "settle"
+
+                        data.phaseStartedAt =
+                            frameNow
+
+                        data.lastCorrectionAt =
+                            frameNow
+
+                        data.proxy.CFrame =
+                            data.target
+
+                        root.CFrame =
+                            data.target
+
+                    elseif frameNow
+                        - data.phaseStartedAt
+                        >= TWEEN_CFG.ReleaseConfirm
+                    then
+                        FinishTweenMovement(
+                            id,
+                            data
+                        )
+
+                        return
+                    end
+                end
+            end
+        )
+
+    return data
 end
 
-local function Tween(targetCFrame, targetObject)
+local function CancelTween()
+    ForceStopTweenMovement()
+end
+
+local function ConvertTweenTarget(
+    value
+)
+    if not value then
+        return nil
+    end
+
+    if typeof(value)
+        == "CFrame"
+    then
+        return value
+    end
+
+    if typeof(value)
+        == "Vector3"
+    then
+        return CFrame.new(
+            value
+        )
+    end
+
+    if typeof(value)
+        ~= "Instance"
+    then
+        return nil
+    end
+
+    if value:IsA(
+        "BasePart"
+    ) then
+        return value.CFrame
+    end
+
+    if value:IsA(
+        "Model"
+    ) then
+        local ok, cf =
+            pcall(function()
+                return value:GetPivot()
+            end)
+
+        if ok then
+            return cf
+        end
+    end
+
+    if value:IsA(
+        "CFrameValue"
+    ) then
+        return value.Value
+    end
+
+    if value:IsA(
+        "Vector3Value"
+    ) then
+        return CFrame.new(
+            value.Value
+        )
+    end
+
+    return nil
+end
+
+local function Tween(
+    targetCFrame,
+    targetObject
+)
     if targetCFrame == false then
         CancelTween()
         return false
     end
 
-    return StartProxyTween(
-        targetCFrame,
-        targetObject
-    )
+    local target =
+        ConvertTweenTarget(
+            targetCFrame
+        )
+
+    if not target then
+        return false
+    end
+
+    RefreshCharacter()
+
+    local root =
+        HumanoidRootPart
+
+    if targetObject ~= nil
+        and targetObject ~= root
+    then
+        return false
+    end
+
+    local active =
+        CurrentTweenMovement
+
+    -- Repeated Mirage/main-loop calls do not restart the same movement.
+    if active
+        and not active.cleaned
+        and (
+            active.target.Position
+            - target.Position
+        ).Magnitude <= 3
+    then
+        return false
+    end
+
+    return StartTweenSession(
+        target
+    ) ~= nil
 end
 
 local function IsTweening()
-    return CurrentTween ~= nil
-        and not CurrentTween.cleaned
+    return CurrentTweenMovement ~= nil
+        and not CurrentTweenMovement.cleaned
 end
 
--- Dich ma luong Mirage hold dang giu.
-local MirageHoldTarget = nil
+local MirageHoldTarget =
+    nil
 
--- GIU API TweenTo CU:
---   TweenTo(false) -> cancel
---   {x,y,z} -> CFrame
---   clamp Y >= 5
 function TweenTo(Position)
-    MirageHoldTarget = nil
+    MirageHoldTarget =
+        nil
 
     if Position == false then
         CancelTween()
@@ -2029,89 +2541,151 @@ function TweenTo(Position)
     end
 
     Position =
-        typeof(Position) ~= "CFrame"
-        and ConvertTo(CFrame, Position)
+        typeof(Position)
+            ~= "CFrame"
+        and ConvertTo(
+            CFrame,
+            Position
+        )
         or Position
 
-    if typeof(Position) == "CFrame" then
-        local p = Position.Position
+    if typeof(Position)
+        == "CFrame"
+    then
+        local p =
+            Position.Position
 
-        Position = CFrame.new(
-            p.X,
-            math.max(p.Y, 5),
-            p.Z
-        )
+        Position =
+            CFrame.new(
+                p.X,
+                math.max(
+                    p.Y,
+                    5
+                ),
+                p.Z
+            )
     end
 
-    Tween(Position)
+    Tween(
+        Position
+    )
 end
 
--- ============================================================
--- MIRAGE MOVEMENT - DUNG CHUNG PROXY TWEEN MOI
--- ============================================================
-local MIRAGE_TWEEN_SPEED = SPEED
-local MIRAGE_SNAP_DISTANCE = 6
+local MIRAGE_TWEEN_SPEED =
+    TWEEN_SPEED
+
+local MIRAGE_SNAP_DISTANCE =
+    6
 
 local MirageMovement = {}
 
 function MirageMovement.cancel()
-    MirageHoldTarget = nil
+    MirageHoldTarget =
+        nil
+
     CancelTween()
 end
 
--- Khong HOLD bang root.CFrame moi frame.
--- Neu roi khoi diem Mirage >6 studs thi goi lai proxy tween.
 task.spawn(function()
     while task.wait(0.3) do
-        local target = MirageHoldTarget
+        local target =
+            MirageHoldTarget
 
         if target then
             RefreshCharacter()
 
-            local root = HumanoidRootPart
+            local root =
+                HumanoidRootPart
 
             if root
                 and root.Parent
-                and (root.Position - target.Position).Magnitude
+                and (
+                    root.Position
+                    - target.Position
+                ).Magnitude
                     > MIRAGE_SNAP_DISTANCE
             then
-                pcall(Tween, target)
+                local active =
+                    CurrentTweenMovement
+
+                if not active
+                    or active.cleaned
+                    or (
+                        active.target.Position
+                        - target.Position
+                    ).Magnitude > 3
+                then
+                    pcall(
+                        Tween,
+                        target
+                    )
+                end
             end
         end
     end
 end)
 
-function MirageMovement.moveTo(targetCFrame)
+function MirageMovement.moveTo(
+    targetCFrame
+)
     RefreshCharacter()
 
-    local root = HumanoidRootPart
-    local hum = Humanoid
+    local root =
+        HumanoidRootPart
+
+    local hum =
+        Humanoid
 
     if not root
         or not root.Parent
         or not hum
         or hum.Health <= 0
-        or typeof(targetCFrame) ~= "CFrame"
+        or typeof(targetCFrame)
+            ~= "CFrame"
     then
         MirageMovement.cancel()
         return false
     end
 
-    MirageHoldTarget = targetCFrame
+    MirageHoldTarget =
+        targetCFrame
 
     local dist =
-        (root.Position - targetCFrame.Position).Magnitude
+        (
+            root.Position
+            - targetCFrame.Position
+        ).Magnitude
 
-    if dist <= MIRAGE_SNAP_DISTANCE then
+    if dist
+        <= MIRAGE_SNAP_DISTANCE
+    then
         return true
     end
 
-    Tween(targetCFrame)
+    local active =
+        CurrentTweenMovement
+
+    if not active
+        or active.cleaned
+        or (
+            active.target.Position
+            - targetCFrame.Position
+        ).Magnitude > 3
+    then
+        Tween(
+            targetCFrame
+        )
+    end
+
     return false
 end
 
-local function TweenToMirage(targetCFrame)
-    return MirageMovement.moveTo(targetCFrame)
+local function TweenToMirage(
+    targetCFrame
+)
+    return MirageMovement.moveTo(
+        targetCFrame
+    )
 end
 
 function GetBlueGear()
@@ -2226,7 +2800,8 @@ local function DoRaceV4Progress()
     local gate = CFrame.new(3032, 2280, -7325)
     TweenTo(gate)
     WaitArrive(gate, 20, 25)
-    -- Dung proxy truoc khi server teleport that vao Temple.
+
+    -- Stop proxy before the real server teleport into Temple.
     CancelTween()
 
     if CaculateDistance(gate) < 30 then
@@ -2240,7 +2815,8 @@ local function DoRaceV4Progress()
         local inside = CFrame.new(28613, 14896, 106)
         TweenTo(inside)
         WaitArrive(inside, 15, 25)
-        -- Dung proxy truoc TeleportBack de khong bi keo nguoc ve diem inside.
+
+        -- Stop proxy before TeleportBack.
         CancelTween()
 
         pcall(function() CommF_:InvokeServer("RaceV4Progress", "Check") end)
@@ -2425,6 +3001,19 @@ while task.wait(1) do
     if not Config["Enabled"] then
         SetStatus("Disabled"); task.wait(5); continue
     end
+
+    -- Same as Kata main state machine: team is a permanent gate.
+    if not EnsureTeam() then
+        SetStatus(
+            "Unable to choose "
+            .. RequestedTeam
+            .. " | retrying..."
+        )
+
+        task.wait(1)
+        continue
+    end
+
     pcall(function() RefreshPlayerData() end)
     pcall(function() RefreshInventory() end)
     RefreshSea()
