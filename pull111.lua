@@ -2075,7 +2075,10 @@ local function StartTweenSession(
                 humanoid.Sit =
                     false
 
-                -- Real game teleport lock: do not fight it.
+                -- Same as Kata Coordinator:
+                -- while AntiMover/Teleporting owns the character, stop writing
+                -- movement but DO NOT zero the current velocity/stabilizer.
+                -- Zeroing here can make the player fall during a brief lock.
                 if MovementLocked(
                     character
                 ) then
@@ -2089,11 +2092,6 @@ local function StartTweenSession(
                             end)
                         end
                     end
-
-                    TweenSetVelocity(
-                        root,
-                        Vector3.zero
-                    )
 
                     return
                 end
@@ -2780,49 +2778,158 @@ end
 -- ban ra luc con dang bay giua duong.
 -- Co timeout: khong den duoc thi van chay tiep nhu ban cu, khong treo main loop.
 local function WaitArrive(target, timeout, tolerance)
-    timeout = timeout or 15
-    tolerance = tolerance or 25
+    tolerance = tolerance or 12
+
+    -- At fixed speed 150, a hard 15/20 second timeout can expire while the
+    -- player is still legitimately travelling. Compute an ETA from the real
+    -- starting distance and add a generous settle/server-correction buffer.
+    local startDistance = CaculateDistance(target)
+
+    if timeout == nil then
+        timeout = math.max(
+            12,
+            (startDistance / TWEEN_SPEED) + 12
+        )
+    end
 
     local deadline = os.clock() + timeout
+
     while os.clock() < deadline do
-        if CaculateDistance(target) <= tolerance then
+        local distance = CaculateDistance(target)
+
+        if distance <= tolerance then
             return true
         end
+
+        -- If movement ended unexpectedly before reaching the target, fail
+        -- immediately so the caller can retry instead of waiting in free-fall.
+        if not IsTweening()
+            and distance > tolerance
+        then
+            return false
+        end
+
         task.wait(0.15)
     end
 
-    return false
+    return CaculateDistance(target) <= tolerance
 end
 
 local function DoRaceV4Progress()
     SetStatus("Temple: dang chay RaceV4Progress")
 
     local gate = CFrame.new(3032, 2280, -7325)
-    TweenTo(gate)
-    WaitArrive(gate, 20, 25)
 
-    -- Stop proxy before the real server teleport into Temple.
+    SetStatus(
+        "Temple: tween toi gate"
+        .. " | dist="
+        .. tostring(math.floor(CaculateDistance(gate)))
+        .. " | speed="
+        .. tostring(TWEEN_SPEED)
+    )
+
+    TweenTo(gate)
+
+    local gateArrived =
+        WaitArrive(gate, nil, 10)
+
+    if not gateArrived then
+        -- IMPORTANT: do NOT CancelTween mid-air.
+        -- The next main-loop pass will retry cleanly.
+        SetStatus(
+            "Temple: chua toi gate -> retry"
+            .. " | dist="
+            .. tostring(math.floor(CaculateDistance(gate)))
+        )
+        return
+    end
+
+    -- We are physically at the gate now; safe to release the proxy immediately
+    -- before the game's real server teleport.
     CancelTween()
 
-    if CaculateDistance(gate) < 30 then
-        pcall(function() CommF_:InvokeServer("RaceV4Progress", "Begin") end)
-        pcall(function() CommF_:InvokeServer("RaceV4Progress", "Check") end)
-        pcall(function() CommF_:InvokeServer("RaceV4Progress", "Teleport") end)
+    if CaculateDistance(gate) < 15 then
+        pcall(function()
+            CommF_:InvokeServer(
+                "RaceV4Progress",
+                "Begin"
+            )
+        end)
+
+        pcall(function()
+            CommF_:InvokeServer(
+                "RaceV4Progress",
+                "Check"
+            )
+        end)
+
+        pcall(function()
+            CommF_:InvokeServer(
+                "RaceV4Progress",
+                "Teleport"
+            )
+        end)
+
         task.wait(2)
 
-        -- Server vua teleport vao temple. Diem nay o trong temple nen thuong gan,
-        -- ban cu snap tuc thi; ban moi phai cho tween xong roi moi TeleportBack.
-        local inside = CFrame.new(28613, 14896, 106)
-        TweenTo(inside)
-        WaitArrive(inside, 15, 25)
+        local inside =
+            CFrame.new(
+                28613,
+                14896,
+                106
+            )
 
-        -- Stop proxy before TeleportBack.
+        SetStatus(
+            "Temple: tween inside"
+            .. " | dist="
+            .. tostring(math.floor(CaculateDistance(inside)))
+            .. " | speed="
+            .. tostring(TWEEN_SPEED)
+        )
+
+        TweenTo(inside)
+
+        local insideArrived =
+            WaitArrive(
+                inside,
+                nil,
+                10
+            )
+
+        if not insideArrived then
+            -- Same rule: never remove the movement controller while mid-air.
+            SetStatus(
+                "Temple: chua toi inside -> retry"
+                .. " | dist="
+                .. tostring(math.floor(CaculateDistance(inside)))
+            )
+            return
+        end
+
         CancelTween()
 
-        pcall(function() CommF_:InvokeServer("RaceV4Progress", "Check") end)
-        pcall(function() CommF_:InvokeServer("RaceV4Progress", "TeleportBack") end)
+        pcall(function()
+            CommF_:InvokeServer(
+                "RaceV4Progress",
+                "Check"
+            )
+        end)
+
+        pcall(function()
+            CommF_:InvokeServer(
+                "RaceV4Progress",
+                "TeleportBack"
+            )
+        end)
+
         task.wait(3)
-        pcall(function() CommF_:InvokeServer("RaceV4Progress", "Continue") end)
+
+        pcall(function()
+            CommF_:InvokeServer(
+                "RaceV4Progress",
+                "Continue"
+            )
+        end)
     end
 end
 
