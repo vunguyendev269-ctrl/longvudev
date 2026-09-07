@@ -1,5 +1,5 @@
 --[[
-    KATAKURI COORDINATOR CLIENT V5.5 - BATCH20 HOP
+    KATAKURI COORDINATOR CLIENT V5.5 - BATCH20 HOP + CAKE STAGE/MIRROR FIX
     Standalone Cake Prince farm + 20-tab shared server coordination.
 
     Design goals:
@@ -147,6 +147,18 @@ local SEA3_PLACE_IDS = {
     [7449423635] = true,
     [100117331123089] = true,
 }
+
+-- Cake Land / Sea of Treats staging + Cake Prince mirror coordinates.
+-- Flow after every successful server join:
+--   qualify server -> tween outside to Cake Land first -> then farm/summon/boss.
+-- Mirror flow follows the older working Banana/Katakuri behavior:
+--   if mirror is open and we are still outside the dimension, tween to the
+--   fixed mirror entrance instead of depending on CurrentLocation/firetouch.
+local CAKE_ISLAND_STAGE_CFRAME = CFrame.new(-2022.299, 65, -12030.977)
+local CAKE_ISLAND_STAGE_RADIUS = 120
+local CAKE_MIRROR_ENTRY_CFRAME = CFrame.new(-2151.82, 149.32, -12404.91)
+local CAKE_DIMENSION_ANCHOR = Vector3.new(-1990.67, 4533, -14973.67)
+local CAKE_DIMENSION_RADIUS = 2000
 
 local function debugPrint(...)
     if Config.Debug then
@@ -363,6 +375,8 @@ State = {
     InQualifiedRoom = false,
     QualifiedSince = nil,
     BossWasSeen = false,
+    CakeIslandReady = false,
+    CakeIslandReadyAt = 0,
     LastSpawnerAt = 0,
     LastMirrorTouchAt = 0,
 
@@ -468,6 +482,8 @@ local function bindCharacterImmediate(character)
     State.Character = character
     State.Humanoid = character and character:FindFirstChildOfClass("Humanoid") or nil
     State.Root = character and character:FindFirstChild("HumanoidRootPart") or nil
+    State.CakeIslandReady = false
+    State.CakeIslandReadyAt = 0
 
     if not character then
         return
@@ -997,8 +1013,9 @@ local function launchProxyTween(data)
 end
 
 -- Khoi dong mot phien di chuyen: mode = MOVE | HOLD | FOLLOW
-local function startSession(mode, targetCFrame, followPart, followOffset)
+local function startSession(mode, targetCFrame, followPart, followOffset, sessionOptions)
     forceStopMovement()
+    sessionOptions = sessionOptions or {}
 
     local character = Player.Character
     local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -1014,7 +1031,9 @@ local function startSession(mode, targetCFrame, followPart, followOffset)
 
     local target = targetCFrame
     if mode == "MOVE" then
-        target = resolveTarget(character, root, humanoid, targetCFrame)
+        if sessionOptions.skipResolveTarget ~= true then
+            target = resolveTarget(character, root, humanoid, targetCFrame)
+        end
         requestStreaming(target.Position)
     end
     local distance = (root.Position - target.Position).Magnitude
@@ -1058,6 +1077,9 @@ local function startSession(mode, targetCFrame, followPart, followOffset)
         bestRemaining = distance, lastNetAt = t0, lastSnapLogAt = 0, lastStatAt = 0,
         lastRemaining = distance,
         stopRequested = false, lockedSeen = false, autoRotate = humanoid.AutoRotate,
+        rawTarget = sessionOptions.skipResolveTarget == true,
+        cancelOnLock = sessionOptions.cancelOnLock == true,
+        cancelOnJump = tonumber(sessionOptions.cancelOnJump),
         instances = { proxy, stabilizer },
     }
     currentMovement = data
@@ -1094,6 +1116,11 @@ local function startSession(mode, targetCFrame, followPart, followOffset)
         -- Game dang teleport (AntiMover/tag Teleporting): KHONG ep, de game
         -- di chuyen. Het lock -> resync proxy theo vi tri moi (teleport that).
         if MovementLocked(character) then
+            if data.cancelOnLock then
+                data.outcome = "game-teleport"
+                finishMovement(id, data)
+                return
+            end
             if not data.lockedSeen then
                 data.lockedSeen = true
                 if data.tween then pcall(function() data.tween:Cancel() end) end
@@ -1141,6 +1168,16 @@ local function startSession(mode, targetCFrame, followPart, followOffset)
         -- do bi keo: lech giua cho ta dat frame truoc va cho server tra ve
         local push = (serverPos - data.lastApplied).Magnitude
         data.maxDev = math.max(data.maxDev, push)
+
+        -- Portal transitions can move the character thousands of studs in one
+        -- frame without exposing Teleporting/AntiMover on every executor.
+        -- Only raw mirror sessions opt into this jump cancel.
+        if data.cancelOnJump and push >= data.cancelOnJump then
+            data.outcome = "game-teleport-jump"
+            finishMovement(id, data)
+            return
+        end
+
         if push > TWEEN_CFG.PushSnap then
             data.snaps += 1
             if now - data.lastSnapLogAt >= TWEEN_CFG.SnapLogGap then
@@ -1322,6 +1359,36 @@ function Movement.moveTo(targetCFrame, speed)
     return false
 end
 
+-- Raw-target variant for portal entry only. It bypasses ground snapping but
+-- still uses the exact same proxy tween / velocity / noclip / phase machine.
+function Movement.moveToRaw(targetCFrame, cancelOnTeleport)
+    local character = Player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local hum = character and character:FindFirstChildOfClass("Humanoid")
+    if not root or not hum or hum.Health <= 0 or typeof(targetCFrame) ~= "CFrame" then return false end
+
+    local options = {
+        skipResolveTarget = true,
+        cancelOnLock = cancelOnTeleport == true,
+        cancelOnJump = cancelOnTeleport == true and 750 or nil,
+    }
+
+    local data = currentMovement
+    if data and not data.cleaned
+        and (data.mode == "MOVE" or data.mode == "HOLD")
+        and data.rawTarget == true
+        and (data.target.Position - targetCFrame.Position).Magnitude <= 3
+    then
+        return data.mode == "HOLD"
+    end
+
+    local dist = (root.Position - targetCFrame.Position).Magnitude
+    local mode = dist <= Config.HoverSnapDistance and "HOLD" or "MOVE"
+    local ok = startSession(mode, targetCFrame, nil, nil, options)
+    Movement.Mode = ok and mode or "IDLE"
+    return mode == "HOLD" and ok ~= nil
+end
+
 -- ============================================================================
 -- [06] CAKE PROGRESS / BOSS DETECTION
 -- ============================================================================
@@ -1363,6 +1430,49 @@ local function mirrorOpen()
     local _, other = getMirrorParts()
     if not other or not other:IsA("BasePart") then return false end
     return other.Transparency == 0
+end
+
+local function inCakePrinceDimension()
+    local root = State.Root
+    if not root or not root.Parent then return false end
+    return (root.Position - CAKE_DIMENSION_ANCHOR).Magnitude < CAKE_DIMENSION_RADIUS
+end
+
+local function atCakeIslandArea()
+    local root = State.Root
+    if not root or not root.Parent then return false end
+    if inCakePrinceDimension() then return false end
+
+    local delta = root.Position - CAKE_ISLAND_STAGE_CFRAME.Position
+    local horizontal = Vector3.new(delta.X, 0, delta.Z).Magnitude
+    return horizontal <= CAKE_ISLAND_STAGE_RADIUS and root.Position.Y < 1200
+end
+
+-- One-time gate before any Cake mob/boss action in a newly joined server.
+-- This intentionally uses normal Movement.moveTo so the existing TweenLab
+-- behavior is preserved exactly for regular travel.
+local function ensureCakeIslandStaged()
+    if State.CakeIslandReady then
+        return true
+    end
+
+    if atCakeIslandArea() then
+        State.CakeIslandReady = true
+        State.CakeIslandReadyAt = os.clock()
+        Movement.cancel()
+        setStatus("Cake Land ready", "CAKE_STAGE_DONE", "Sea of Treats / Cake Island")
+        return true
+    end
+
+    local root = State.Root
+    local distance = root and (root.Position - CAKE_ISLAND_STAGE_CFRAME.Position).Magnitude or 0
+    setStatus(
+        "Moving outside to Cake Land...",
+        "CAKE_STAGE",
+        string.format("Sea of Treats | %.0f studs", distance)
+    )
+    Movement.moveTo(CAKE_ISLAND_STAGE_CFRAME, Config.TweenSpeed)
+    return false
 end
 
 local function queryProgress(force)
@@ -1694,21 +1804,34 @@ local function farmCakeMobStep(progress)
     )
 end
 
-local function touchMirror()
-    if os.clock() - State.LastMirrorTouchAt < Config.MirrorTouchCooldown then return end
+local function enterCakePrinceMirrorStep(reason)
     local root = State.Root
-    local main = getMirrorParts()
-    if not root or not main or not main:IsA("BasePart") then return end
+    if not root or not root.Parent then return false end
 
-    State.LastMirrorTouchAt = os.clock()
-    Movement.moveTo(main.CFrame * CFrame.new(0, 4, 0))
-    if (root.Position - main.Position).Magnitude <= 15 and type(firetouchinterest) == "function" then
-        pcall(function()
-            firetouchinterest(root, main, 0)
-            task.wait(0.08)
-            firetouchinterest(root, main, 1)
-        end)
+    -- Same spatial test used by the older working Katakuri source.
+    if inCakePrinceDimension() then
+        Movement.cancel()
+        return true
     end
+
+    local now = os.clock()
+    if now - State.LastMirrorTouchAt >= Config.MirrorTouchCooldown then
+        State.LastMirrorTouchAt = now
+    end
+
+    local distance = (root.Position - CAKE_MIRROR_ENTRY_CFRAME.Position).Magnitude
+    setStatus(
+        "Entering Cake Prince mirror...",
+        "ENTER_BOSS",
+        string.format("%s | %.0f studs", tostring(reason or "mirror_open"), distance)
+    )
+
+    -- Do NOT use CurrentLocation here. Do NOT force firetouchinterest.
+    -- Tween to the exact outside mirror entrance; the game portal performs the
+    -- dimension transition naturally. The raw session self-cancels when that
+    -- game teleport/large jump is detected so the proxy cannot pull us back.
+    Movement.moveToRaw(CAKE_MIRROR_ENTRY_CFRAME, true)
+    return false
 end
 
 local function spawnCakePrinceStep()
@@ -1717,34 +1840,38 @@ local function spawnCakePrinceStep()
         State.LastSpawnerAt = os.clock()
         pcall(function() COMMF_:InvokeServer("CakePrinceSpawner", true) end)
     end
-    touchMirror()
+
+    -- Once the mirror opens (or a stored boss is visible), immediately start
+    -- the same outside -> mirror entry flow used by the older Katakuri source.
+    if mirrorOpen() or storedCakePrince() then
+        enterCakePrinceMirrorStep("spawn_ready")
+    end
 end
 
 local function killCakePrinceStep()
     local boss = activeCakePrince()
+    local stored = storedCakePrince()
+
     if not boss then
-        local stored = storedCakePrince()
-        if stored then
-            setStatus("Cake Prince detected - entering mirror...", "ENTER_BOSS")
-            touchMirror()
+        if stored or mirrorOpen() then
+            enterCakePrinceMirrorStep(stored and "boss_stored" or "mirror_open")
         else
             setStatus("Waiting Cake Prince model...", "WAIT_BOSS")
-            touchMirror()
         end
         return
     end
 
-    -- The Ghoul/Cyborg source enters BigMirror before attacking Cake Prince.
-    -- Keep that gate so movement never races the dimension transition.
-    if tostring(Player:GetAttribute("CurrentLocation") or "") ~= "Dimensional Shift" then
-        local mirrorMain = getMirrorParts()
-        if mirrorMain then
-            setStatus("Cake Prince active - entering Dimensional Shift", "ENTER_BOSS")
-            touchMirror()
-            return
-        end
+    -- Fix for the old ENTER_BOSS loop:
+    -- CurrentLocation is not a reliable dimension signal. The working source
+    -- uses the dimension coordinates instead. If Cake Prince exists while we
+    -- are still outside and BigMirror is open, enter through the mirror first.
+    if not inCakePrinceDimension() and mirrorOpen() then
+        enterCakePrinceMirrorStep("boss_active_outside")
+        return
     end
 
+    -- Banana behavior once the boss connection is usable: move directly to the
+    -- boss and attack. No CurrentLocation gate is allowed to block this path.
     State.BossWasSeen = true
     equipMelee()
     local root = boss:FindFirstChild("HumanoidRootPart")
@@ -1757,7 +1884,6 @@ local function killCakePrinceStep()
     end
     setStatus("Killing Cake Prince", "KILL_BOSS", boss:FindFirstChildOfClass("Humanoid") and ("HP=" .. math.floor(boss.Humanoid.Health)) or "")
 end
-
 
 -- One dedicated fast-attack loop. Attack cadence no longer depends on the
 -- slower progress/state-machine loop, and only one loop owns hit remotes.
@@ -2756,6 +2882,12 @@ local function handleQualifiedRoom(progress)
         publishRoom(progress)
     end
 
+    -- Mandatory post-hop staging: no mob/boss/summon action is allowed before
+    -- the player has tweened outside to Cake Land / Sea of Treats once.
+    if not ensureCakeIslandStaged() then
+        return
+    end
+
     local active = activeCakePrince()
     local stored = storedCakePrince()
     if active or stored then
@@ -2782,6 +2914,8 @@ local function leaveQualifiedRoom(reason)
     State.InQualifiedRoom = false
     State.QualifiedSince = nil
     State.BossWasSeen = false
+    State.CakeIslandReady = false
+    State.CakeIslandReadyAt = 0
     State.ForceLeaveRoom = false
     State.BrowserCache = nil
     setStatus("Cake cycle ended - scouting again", "SCOUT", tostring(reason or "cycle_reset"))
