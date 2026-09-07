@@ -478,6 +478,34 @@ LocalPlayer.CharacterRemoving:Connect(function(character)
     end
 end)
 
+
+-- ============================================================
+-- CHARACTER NOCLIP
+-- Keep character body parts non-collidable while PullLever is running.
+-- Proxy tween already has directional obstacle noclip; this adds the
+-- character-side noclip from the older PullLever source as a second layer.
+-- ============================================================
+
+local function ApplyCharacterNoclip()
+    local character = LocalPlayer.Character
+    if not character then
+        return
+    end
+
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart")
+            and part.CanCollide
+        then
+            part.CanCollide = false
+        end
+    end
+end
+
+local CharacterNoclipConnection =
+    RunService.Stepped:Connect(function()
+        pcall(ApplyCharacterNoclip)
+    end)
+
 SetStatus("Waiting Data/Race...")
 repeat
     task.wait(1)
@@ -2833,11 +2861,20 @@ end
 -- IMPORTANT:
 -- Do NOT manually tween from Great Tree to the Temple coordinate.
 -- Do NOT call TeleportBack here.
-local RACEV4_GATE =
+-- Main RaceV4 NPC/gate position + 10 studs above the NPC.
+local RACEV4_NPC =
     CFrame.new(
         3028,
         2281,
         -7325
+    )
+
+local RACEV4_GATE =
+    RACEV4_NPC
+    * CFrame.new(
+        0,
+        10,
+        0
     )
 
 local RACEV4_TEMPLE_ANCHOR =
@@ -3285,5 +3322,12 @@ while task.wait(1) do
     end
     task.wait(3)
 end
+
+
+pcall(function()
+    if CharacterNoclipConnection then
+        CharacterNoclipConnection:Disconnect()
+    end
+end)
 
 end)()
