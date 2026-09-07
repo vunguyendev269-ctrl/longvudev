@@ -2766,24 +2766,31 @@ local function IsCurrentRaceV3()
     end)
     return ok and v == -2
 end
-local function IsRaceV4ProgressReady()
-    local ok, v = pcall(function() return CommF_:InvokeServer("RaceV4Progress", "Check") end)
-    return ok and v == 4
+local function GetRaceV4Progress()
+    local ok, value = pcall(function()
+        return CommF_:InvokeServer(
+            "RaceV4Progress",
+            "Check"
+        )
+    end)
+
+    if not ok then
+        return nil
+    end
+
+    return tonumber(value) or value
 end
 
--- Cho tween den dich thuc su.
--- Ban tween cu snap root.CFrame khi dist <= 200 -> goi TweenTo() xong la coi nhu
--- da den, ban remote ngay dong sau van dung vi tri. Ban moi bo snap (snap la cai
--- game chan) nen tween can thoi gian that -> phai cho, khong thi Check/TeleportBack
--- ban ra luc con dang bay giua duong.
--- Co timeout: khong den duoc thi van chay tiep nhu ban cu, khong treo main loop.
+local function IsRaceV4ProgressReady()
+    return GetRaceV4Progress() == 4
+end
+
+-- Wait for a normal proxy tween to physically reach its target.
 local function WaitArrive(target, timeout, tolerance)
     tolerance = tolerance or 12
 
-    -- At fixed speed 150, a hard 15/20 second timeout can expire while the
-    -- player is still legitimately travelling. Compute an ETA from the real
-    -- starting distance and add a generous settle/server-correction buffer.
-    local startDistance = CaculateDistance(target)
+    local startDistance =
+        CaculateDistance(target)
 
     if timeout == nil then
         timeout = math.max(
@@ -2792,17 +2799,18 @@ local function WaitArrive(target, timeout, tolerance)
         )
     end
 
-    local deadline = os.clock() + timeout
+    local deadline =
+        os.clock() + timeout
 
     while os.clock() < deadline do
-        local distance = CaculateDistance(target)
+        local distance =
+            CaculateDistance(target)
 
         if distance <= tolerance then
             return true
         end
 
-        -- If movement ended unexpectedly before reaching the target, fail
-        -- immediately so the caller can retry instead of waiting in free-fall.
+        -- Do not sit in free-fall if movement died unexpectedly.
         if not IsTweening()
             and distance > tolerance
         then
@@ -2812,43 +2820,79 @@ local function WaitArrive(target, timeout, tolerance)
         task.wait(0.15)
     end
 
-    return CaculateDistance(target) <= tolerance
+    return CaculateDistance(target)
+        <= tolerance
+end
+
+-- Working V4 reference:
+--   Check == 1 -> Check + Begin
+--   Check == 2 -> Teleport from Great Tree gate until server puts us in Temple
+--   other intermediate state -> Check + Continue
+--   Check == 4 -> ready for Mirage
+--
+-- IMPORTANT:
+-- Do NOT manually tween from Great Tree to the Temple coordinate.
+-- Do NOT call TeleportBack here.
+local RACEV4_GATE =
+    CFrame.new(
+        3028,
+        2281,
+        -7325
+    )
+
+local RACEV4_TEMPLE_ANCHOR =
+    CFrame.new(
+        28286.35546875,
+        14896.5078125,
+        102.62469482422
+    )
+
+local function IsInsideRaceV4Temple()
+    RefreshCharacter()
+
+    local root =
+        HumanoidRootPart
+
+    if not root
+        or not root.Parent
+    then
+        return false
+    end
+
+    return (
+        root.Position
+        - RACEV4_TEMPLE_ANCHOR.Position
+    ).Magnitude <= 120
 end
 
 local function DoRaceV4Progress()
-    SetStatus("Temple: dang chay RaceV4Progress")
-
-    local gate = CFrame.new(3032, 2280, -7325)
+    local progress =
+        GetRaceV4Progress()
 
     SetStatus(
-        "Temple: tween toi gate"
-        .. " | dist="
-        .. tostring(math.floor(CaculateDistance(gate)))
-        .. " | speed="
-        .. tostring(TWEEN_SPEED)
+        "Temple RaceV4 Check: "
+        .. tostring(progress)
     )
 
-    TweenTo(gate)
-
-    local gateArrived =
-        WaitArrive(gate, nil, 10)
-
-    if not gateArrived then
-        -- IMPORTANT: do NOT CancelTween mid-air.
-        -- The next main-loop pass will retry cleanly.
-        SetStatus(
-            "Temple: chua toi gate -> retry"
-            .. " | dist="
-            .. tostring(math.floor(CaculateDistance(gate)))
-        )
-        return
+    if progress == 4 then
+        return true
     end
 
-    -- We are physically at the gate now; safe to release the proxy immediately
-    -- before the game's real server teleport.
-    CancelTween()
+    -- Same first stage as the old working V4 script.
+    if progress == 1 then
+        SetStatus(
+            "Temple Check=1 -> Begin"
+        )
 
-    if CaculateDistance(gate) < 15 then
+        pcall(function()
+            CommF_:InvokeServer(
+                "RaceV4Progress",
+                "Check"
+            )
+        end)
+
+        task.wait(0.25)
+
         pcall(function()
             CommF_:InvokeServer(
                 "RaceV4Progress",
@@ -2856,81 +2900,145 @@ local function DoRaceV4Progress()
             )
         end)
 
-        pcall(function()
-            CommF_:InvokeServer(
-                "RaceV4Progress",
-                "Check"
-            )
-        end)
+        task.wait(0.75)
 
-        pcall(function()
-            CommF_:InvokeServer(
-                "RaceV4Progress",
-                "Teleport"
-            )
-        end)
+        return false
+    end
 
-        task.wait(2)
-
-        local inside =
-            CFrame.new(
-                28613,
-                14896,
-                106
-            )
-
-        SetStatus(
-            "Temple: tween inside"
-            .. " | dist="
-            .. tostring(math.floor(CaculateDistance(inside)))
-            .. " | speed="
-            .. tostring(TWEEN_SPEED)
-        )
-
-        TweenTo(inside)
-
-        local insideArrived =
-            WaitArrive(
-                inside,
-                nil,
-                10
-            )
-
-        if not insideArrived then
-            -- Same rule: never remove the movement controller while mid-air.
+    -- This is the state shown in the user's screenshot.
+    -- The correct action is to reach the Great Tree gate and let
+    -- RaceV4Progress.Teleport perform the REAL server transition.
+    if progress == 2 then
+        if IsInsideRaceV4Temple() then
+            CancelTween()
             SetStatus(
-                "Temple: chua toi inside -> retry"
-                .. " | dist="
-                .. tostring(math.floor(CaculateDistance(inside)))
+                "Temple Check=2 -> inside Temple"
             )
-            return
+            return false
         end
 
+        local gateDistance =
+            CaculateDistance(
+                RACEV4_GATE
+            )
+
+        if gateDistance > 12 then
+            SetStatus(
+                "Temple Check=2 -> tween gate"
+                .. " | dist="
+                .. tostring(
+                    math.floor(
+                        gateDistance
+                    )
+                )
+            )
+
+            TweenTo(
+                RACEV4_GATE
+            )
+
+            local arrived =
+                WaitArrive(
+                    RACEV4_GATE,
+                    nil,
+                    10
+                )
+
+            if not arrived then
+                SetStatus(
+                    "Temple Check=2 -> gate retry"
+                )
+                return false
+            end
+        end
+
+        -- We are at the gate. Release client movement before asking
+        -- the server to perform the real Temple teleport.
         CancelTween()
 
-        pcall(function()
-            CommF_:InvokeServer(
-                "RaceV4Progress",
-                "Check"
-            )
-        end)
+        SetStatus(
+            "Temple Check=2 -> Teleport"
+        )
 
-        pcall(function()
-            CommF_:InvokeServer(
-                "RaceV4Progress",
-                "TeleportBack"
-            )
-        end)
+        local deadline =
+            os.clock() + 12
 
-        task.wait(3)
+        while os.clock() < deadline do
+            if IsInsideRaceV4Temple() then
+                SetStatus(
+                    "Temple entered successfully"
+                )
+                return false
+            end
 
-        pcall(function()
-            CommF_:InvokeServer(
-                "RaceV4Progress",
-                "Continue"
-            )
-        end)
+            pcall(function()
+                CommF_:InvokeServer(
+                    "RaceV4Progress",
+                    "Teleport"
+                )
+            end)
+
+            -- Give the server time to apply the real teleport.
+            task.wait(0.45)
+
+            if IsInsideRaceV4Temple() then
+                SetStatus(
+                    "Temple entered successfully"
+                )
+                return false
+            end
+        end
+
+        SetStatus(
+            "Temple Check=2 -> Teleport retry"
+        )
+
+        return false
     end
+
+    -- Old working V4 source uses Continue for the stage after Check=2.
+    -- Most importantly, there is NO TeleportBack before Continue.
+    SetStatus(
+        "Temple Check="
+        .. tostring(progress)
+        .. " -> Continue"
+    )
+
+    pcall(function()
+        CommF_:InvokeServer(
+            "RaceV4Progress",
+            "Check"
+        )
+    end)
+
+    task.wait(1)
+
+    pcall(function()
+        CommF_:InvokeServer(
+            "RaceV4Progress",
+            "Continue"
+        )
+    end)
+
+    -- Poll briefly so UI/main loop can see 4 as soon as server updates.
+    local deadline =
+        os.clock() + 4
+
+    while os.clock() < deadline do
+        local nowProgress =
+            GetRaceV4Progress()
+
+        if nowProgress == 4 then
+            SetStatus(
+                "RaceV4 Check=4 -> READY"
+            )
+            return true
+        end
+
+        task.wait(0.35)
+    end
+
+    return false
 end
 
 local function DoMirageBlueGear()
@@ -3088,8 +3196,8 @@ local function _UIUpdateTickInner()
     end
     local ok, door = pcall(function() return CommF_:InvokeServer("CheckTempleDoor") end)
     _doorLabel.Text    = "Temple Door: "     .. (ok and tostring(door) or "?")
-    local ok2, prog = pcall(function() return CommF_:InvokeServer("RaceV4Progress", "Check") end)
-    _progressLabel.Text = "RaceV4 Check: "   .. (ok2 and tostring(prog) or "?")
+    local prog = GetRaceV4Progress()
+    _progressLabel.Text = "RaceV4 Check: " .. tostring(prog or "?")
 end
 
 -- Ghi vao label o CoreGui/gethui can identity cao. Neu mot require
