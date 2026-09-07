@@ -2715,14 +2715,172 @@ local function TweenToMirage(
 end
 
 function GetBlueGear()
-    local mi = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("MysticIsland")
-    if not mi then return nil end
-    for _, v in mi:GetDescendants() do
-        if v:IsA("MeshPart") and v.MeshId == "rbxassetid://10153114969" and v.Transparency ~= 1 then
-            return v.CFrame
+    local map = workspace:FindFirstChild("Map")
+    local mi = map and map:FindFirstChild("MysticIsland")
+    if not mi then
+        return nil
+    end
+
+    -- Match the old Banana/Kaitun behavior first:
+    -- Blue Gear is a direct MeshPart child with this exact MeshId.
+    for _, gear in ipairs(mi:GetChildren()) do
+        if gear:IsA("MeshPart")
+            and gear.MeshId == "rbxassetid://10153114969"
+        then
+            return gear
         end
     end
+
+    -- Streaming/layout fallback in case the game nests it after an update.
+    for _, gear in ipairs(mi:GetDescendants()) do
+        if gear:IsA("MeshPart")
+            and gear.MeshId == "rbxassetid://10153114969"
+        then
+            return gear
+        end
+    end
+
     return nil
+end
+
+local function BlueGearCollected(gear)
+    if not gear or not gear.Parent then
+        return true
+    end
+
+    -- In some builds the gear is hidden instead of immediately destroyed.
+    local ok, transparency = pcall(function()
+        return gear.Transparency
+    end)
+
+    return ok and tonumber(transparency) and transparency >= 1
+end
+
+local function TouchBlueGear(gear)
+    if not gear
+        or not gear.Parent
+        or not gear:IsA("BasePart")
+    then
+        return false
+    end
+
+    RefreshCharacter()
+
+    local root = HumanoidRootPart
+    local hum = Humanoid
+
+    if not root
+        or not root.Parent
+        or not hum
+        or hum.Health <= 0
+    then
+        return false
+    end
+
+    if BlueGearCollected(gear) then
+        MirageMovement.cancel()
+        return true
+    end
+
+    local distance =
+        (root.Position - gear.Position).Magnitude
+
+    -- Normal proxy travel until close enough.
+    -- Do not use MirageMovement's 6-stud "arrived" result as collection.
+    if distance > 5 then
+        MirageHoldTarget = gear.CFrame
+
+        local active = CurrentTweenMovement
+        if not active
+            or active.cleaned
+            or (active.target.Position - gear.Position).Magnitude > 2
+        then
+            Tween(gear.CFrame)
+        end
+
+        SetStatus(
+            "Blue Gear -> approaching"
+            .. " | dist="
+            .. tostring(math.floor(distance))
+        )
+
+        return false
+    end
+
+    -- We are close: collection needs a REAL overlap/touch, not merely
+    -- "within 6 studs". Release proxy so it cannot hold us off the hitbox.
+    MirageHoldTarget = nil
+    CancelTween()
+
+    SetStatus("Blue Gear -> touching")
+
+    local deadline = os.clock() + 1.6
+    local pulse = 0
+
+    while os.clock() < deadline do
+        RefreshCharacter()
+
+        root = HumanoidRootPart
+        hum = Humanoid
+
+        if not root
+            or not root.Parent
+            or not hum
+            or hum.Health <= 0
+            or not gear
+            or not gear.Parent
+        then
+            break
+        end
+
+        if BlueGearCollected(gear) then
+            SetStatus("Blue Gear collected")
+            return true
+        end
+
+        pulse += 1
+
+        -- Keep the character physically overlapping the gear for several
+        -- physics frames. Small alternating Y offsets help Touched fire on
+        -- executors where a single CFrame assignment does not create contact.
+        local yOffset = (pulse % 2 == 0) and 0.35 or -0.35
+
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+            root.CanTouch = true
+            root.CFrame = gear.CFrame * CFrame.new(0, yOffset, 0)
+        end)
+
+        -- Executor-supported explicit touch, same physical contact we want
+        -- from moving into the Blue Gear.
+        if type(firetouchinterest) == "function" then
+            pcall(function()
+                firetouchinterest(root, gear, 0)
+                task.wait()
+                firetouchinterest(root, gear, 1)
+            end)
+        end
+
+        task.wait(0.08)
+    end
+
+    if BlueGearCollected(gear) then
+        SetStatus("Blue Gear collected")
+        return true
+    end
+
+    SetStatus(
+        "Blue Gear touch retry"
+        .. " | dist="
+        .. tostring(
+            math.floor(
+                (root.Position - gear.Position).Magnitude
+            )
+        )
+    )
+
+    return false
 end
 
 local function HasMirrorFractal()
@@ -3128,9 +3286,8 @@ local function DoMirageBlueGear()
     -- ========================================================
     local blue = GetBlueGear()
 
-    if blue then
-        SetStatus("Mirage YES + Blue Gear -> Tween")
-        TweenToMirage(blue)
+    if blue and not BlueGearCollected(blue) then
+        TouchBlueGear(blue)
         return
     end
 
