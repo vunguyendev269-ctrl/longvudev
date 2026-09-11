@@ -147,7 +147,7 @@ do
     Config.UI_THROTTLE        = 0.2    -- File A live status 0.2s
     Config.DEAD_JOB_TTL       = 1800   -- File A 2175
     Config.MAIN_TURN_TIMEOUT  = 300    -- File A 1752
-    Config.TRIAL_ACTIVE_TIMEOUT = 60   -- timeout riêng cho một lần Trial Race (không phải toàn lượt Main)
+    Config.TRIAL_ACTIVE_TIMEOUT = 65   -- Main/Ally: kẹt in_trial quá 65s thì reset Character
     Config.TRAIN_WINDOW       = 300    -- File A 1612
     Config.HELPRESET_TIMEOUT  = 25     -- File A 2005
     -- CLEAN JOIN: fullmoon-join LUÔN do server + 2 Ally điều phối (bỏ tự-hop). Method chỉ là hành vi sau trial.
@@ -2406,6 +2406,87 @@ do
         return "ffdown"
     end
 
+    -- =========================================================================
+    -- [TEMPLE READINESS FIX]
+    -- Temple model tồn tại trong Map KHÔNG đồng nghĩa Character đã được
+    -- requestEntrance đưa vào Temple. Tách 2 khái niệm:
+    --   1) characterInTempleArea(): HRP thật sự đã ở khu Temple.
+    --   2) trialWorldReady(): Temple + _WorldOrigin.Locations + Race đã replicate.
+    --      Không ép trial marker/real Door để tránh deadlock trên server load chậm.
+    --
+    -- Chỉ dùng làm readiness gate; KHÔNG đổi trial/combat/business flow.
+    -- =========================================================================
+    function TempleManager.characterInTempleArea()
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if not (char and hum and hrp and hum.Health > 0) then
+            return false, math.huge, "character"
+        end
+
+        local distance =
+            (hrp.Position - TEMPLE_ENTRY).Magnitude
+
+        return distance < 3000, distance,
+            distance < 3000 and "inside" or "outside"
+    end
+
+    function TempleManager.trialWorldReady()
+        if not Config.SEA3_PLACEIDS[game.PlaceId] then
+            return false, "not_sea3"
+        end
+
+        local remotes =
+            ReplicatedStorage:FindFirstChild("Remotes")
+
+        local commF =
+            remotes
+            and remotes:FindFirstChild("CommF_")
+
+        if not commF then
+            return false, "commf"
+        end
+
+        local map = workspace:FindFirstChild("Map")
+        if not map then
+            return false, "map"
+        end
+
+        -- templeState() có logic reparent MapStash cũ; gọi nhẹ 1 lần để
+        -- giữ đúng behavior cũ nhưng không xem "model có" là Character đã vào.
+        if not WorldProbe.getTemple() then
+            pcall(TempleManager.templeState)
+        end
+
+        local temple = WorldProbe.getTemple()
+        if not temple then
+            return false, "temple_model"
+        end
+
+        local worldOrigin =
+            workspace:FindFirstChild("_WorldOrigin")
+
+        local locations =
+            worldOrigin
+            and worldOrigin:FindFirstChild("Locations")
+
+        if not locations then
+            return false, "locations"
+        end
+
+        local race = WorldProbe.getRace()
+        if not race then
+            return false, "race"
+        end
+
+        -- KHÔNG bắt buộc trial marker / real Door phải tồn tại ở bước này:
+        -- một số race/server chỉ replicate chúng muộn hơn khi chạm cửa.
+        -- Ép hai object đó ở đây có thể tạo deadlock "chưa tới cửa -> chưa spawn marker".
+        -- Temple model + Locations + Race đã đủ để bắt đầu đi tới manual door CFrame.
+        return true, "ready"
+    end
+
     -- toposSlow giữ API cũ nhưng dùng chung NEW TWEEN CORE 150 studs/s.
     -- Tất cả player movement hiện dùng chung proxy tween 150 studs/s.
     -- Riêng trial door, tween quá nhanh (200 studs/s + Linear.Out decelerate) khiến HRP đến
@@ -2435,16 +2516,40 @@ do
     -- FIX (user 2026-07-04): ưu tiên WorldProbe.getTrialDoorCFrame() (toạ độ chuẩn có hướng),
     -- CHỈ fallback getDoorForRace() nếu không có manualCf. Snap sát cửa khi d<=35.
     function TempleManager.goToMyDoor()
-        if Movement.getdis(CFrame.new(TEMPLE_ENTRY)) >= 3000 then
-            if not RuntimeState.lastReqEntrance or (tick() - RuntimeState.lastReqEntrance) > 4 then
+        local insideTemple, templeDistance =
+            TempleManager.characterInTempleArea()
+
+        if not insideTemple then
+            if not RuntimeState.lastReqEntrance
+                or (tick() - RuntimeState.lastReqEntrance) > 4
+            then
                 RuntimeState.lastReqEntrance = tick()
+
                 pcall(function()
-                    ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", TEMPLE_ENTRY)
+                    ReplicatedStorage.Remotes.CommF_
+                        :InvokeServer(
+                            "requestEntrance",
+                            TEMPLE_ENTRY
+                        )
                 end)
             end
+
             Diagnostics.lastDoorSrc = "far"
-            return false
+            Diagnostics.lastDoorDist = templeDistance
+            return false, "entering_temple"
         end
+
+        -- Character đã ở vùng Temple, nhưng chờ object thật replicate đủ
+        -- trước khi tween tới cửa. Tránh bay vào tọa độ manual quá sớm.
+        local worldReady, worldReason =
+            TempleManager.trialWorldReady()
+
+        if not worldReady then
+            Diagnostics.lastDoorSrc =
+                "load:" .. tostring(worldReason)
+            return false, worldReason
+        end
+
         local manualCf = WorldProbe.getTrialDoorCFrame()
         local targetCf, src, doorName
         if manualCf then
@@ -4570,8 +4675,47 @@ do
             TrialActions.doTrialForMyRace()
             return "running_trial"
         else
-            status(roleName .. " Ready for trialing (đợi đồng bộ ability)")
-            goToMyDoor()
+            local insideTemple, _, templeReason =
+                TempleManager.characterInTempleArea()
+
+            if not insideTemple then
+                status(
+                    roleName
+                    .. " Đang vào Temple of Time..."
+                )
+                goToMyDoor()
+                return "entering_temple"
+            end
+
+            local worldReady, worldReason =
+                TempleManager.trialWorldReady()
+
+            if not worldReady then
+                status(
+                    roleName
+                    .. " Đã vào Temple — đang chờ cửa trial load ("
+                    .. tostring(worldReason or templeReason)
+                    .. ")"
+                )
+                goToMyDoor()
+                return "waiting_trial_door"
+            end
+
+            local atDoor =
+                goToMyDoor()
+
+            if atDoor then
+                status(
+                    roleName
+                    .. " Ready for trialing (đợi đồng bộ ability)"
+                )
+            else
+                status(
+                    roleName
+                    .. " Đang tới cửa trial..."
+                )
+            end
+
             return "moving_to_trial"
         end
     end
@@ -6993,28 +7137,106 @@ do
 end
 
 --[[ ============================================================================
-[27b] GAME READY GATE — chờ team/char/data (timeout 45s), KHÔNG block.
-(File A 1549-1568)
+[27b] GAME READY GATE — readiness thật, KHÔNG force-ready theo timeout.
+  - Không block startup/UI/team.
+  - MainLoop tự chờ RuntimeState.gameReady.
+  - Chỉ ready khi client, Sea3, team, Character, Race, CommF_, Map và
+    _WorldOrigin.Locations đã có.
+  - 45s chỉ WARN; tiếp tục chờ thay vì set true giả.
 ============================================================================ ]]
 startGameReadyGate = function()
-    Logger.info("[BOOT] waiting game ready", "boot_gate")
+    RuntimeState.gameReady = false
+    Logger.info("[BOOT] waiting real game/world ready", "boot_gate")
+
     task.spawn(function()
         local t0 = tick()
-        repeat
+        local warned45 = false
+
+        while Runtime.alive do
             task.wait(0.2)
-            local c   = LocalPlayer.Character
-            local hum = c and c:FindFirstChildOfClass("Humanoid")
-            local ready = LocalPlayer.Team
-                and c and c:FindFirstChild("HumanoidRootPart")
-                and hum and hum.Health > 0
-                and LocalPlayer:FindFirstChild("Data") and LocalPlayer.Data:FindFirstChild("Race")
+
+            local char =
+                LocalPlayer.Character
+
+            local hum =
+                char
+                and char:FindFirstChildOfClass("Humanoid")
+
+            local hrp =
+                char
+                and char:FindFirstChild("HumanoidRootPart")
+
+            local data =
+                LocalPlayer:FindFirstChild("Data")
+
+            local race =
+                data
+                and data:FindFirstChild("Race")
+
+            local remotes =
+                ReplicatedStorage:FindFirstChild("Remotes")
+
+            local commF =
+                remotes
+                and remotes:FindFirstChild("CommF_")
+
+            local pgui =
+                LocalPlayer:FindFirstChild("PlayerGui")
+
+            local loadingScreen =
+                pgui
+                and pgui:FindFirstChild(
+                    "LoadingScreen",
+                    true
+                )
+
+            local map =
+                workspace:FindFirstChild("Map")
+
+            local worldOrigin =
+                workspace:FindFirstChild("_WorldOrigin")
+
+            local locations =
+                worldOrigin
+                and worldOrigin:FindFirstChild("Locations")
+
+            local ready =
+                game:IsLoaded()
+                and Config.SEA3_PLACEIDS[game.PlaceId] == true
+                and LocalPlayer.Team ~= nil
+                and char ~= nil
+                and hrp ~= nil
+                and hum ~= nil
+                and hum.Health > 0
+                and race ~= nil
+                and commF ~= nil
+                and pgui ~= nil
+                and loadingScreen == nil
+                and map ~= nil
+                and locations ~= nil
+
             if ready then
-                Logger.info("[BOOT] playergui ready", "boot_ok_pgui")
-                break
+                RuntimeState.gameReady = true
+
+                Logger.ok(
+                    ("[BOOT] real game/world ready (%.1fs elapsed)")
+                        :format(tick() - t0),
+                    "boot_ok"
+                )
+                return
             end
-        until (tick() - t0) > 45
-        RuntimeState.gameReady = true
-        Logger.ok(("[BOOT] game ready (%.1fs elapsed)"):format(tick() - t0), "boot_ok")
+
+            if not warned45
+                and (tick() - t0) >= 45
+            then
+                warned45 = true
+                Logger.warn(
+                    "[BOOT] >45s vẫn chưa ready hoàn chỉnh; "
+                    .. "tiếp tục chờ, KHÔNG force gameReady=true",
+                    "boot_wait_long"
+                )
+            end
+        end
     end)
 end
 
@@ -8399,10 +8621,10 @@ end
 _G.AllyFullMoonWatch = AllyFullMoonWatch
 
 --[[ ============================================================================
- [27.5] TRIAL TIMEOUT WATCHDOG — CLIENT ONLY, đúng 60 giây kể từ lúc VÀO TRIAL.
+ [27.5] TRIAL TIMEOUT WATCHDOG — CLIENT ONLY, đúng 65 giây kể từ lúc VÀO TRIAL.
   - Chỉ start khi _inTrialNow == true và status đã chuyển sang in_trail.
   - Không phụ thuộc server/cycle/event protocol.
-  - Nếu Trial chưa hoàn thành sau 60s: hủy movement/skill và reset Character.
+  - Nếu Main/Ally vẫn còn in_trial sau 65s: hủy movement/skill và reset Character.
   - Chạy task riêng nên vẫn hoạt động nếu doTrialForMyRace() đang block.
 ============================================================================ ]]
 TrialTimeoutWatch = {
@@ -8414,6 +8636,9 @@ TrialTimeoutWatch = {
 }
 
 do
+    local TRIAL_TIMEOUT_SECONDS =
+        tonumber(Config.TRIAL_ACTIVE_TIMEOUT) or 65
+
     local function currentToken()
         return tostring(State.characterToken or LocalPlayer.Character or "no-character")
     end
@@ -8495,13 +8720,24 @@ do
                     return
                 end
 
-                -- Main loop đã xác nhận rời Trial bình thường.
-                if RuntimeState.inTrial ~= true then
+                -- Không stop timer chỉ vì spatial RuntimeState.inTrial tụt sớm.
+                -- Nếu status local vẫn là "in_trail" thì watchdog PHẢI tiếp tục,
+                -- đúng yêu cầu Main/Ally kẹt in_trial 65s => reset.
+                local localStatus =
+                    State.getMainStatus(State.myName)
+
+                local stillMarkedInTrial =
+                    RuntimeState.inTrial == true
+                    or localStatus == "in_trail"
+
+                if not stillMarkedInTrial then
                     clearActiveWatch(myGeneration)
                     return
                 end
 
-                if (tick() - TrialTimeoutWatch.startedAt) >= 60 then
+                if (tick() - TrialTimeoutWatch.startedAt)
+                    >= TRIAL_TIMEOUT_SECONDS
+                then
                     TrialTimeoutWatch.timedOutCharacterToken = token
                     State.trialTimeoutCycleId = token
                     TrialTimeoutWatch.active = false
@@ -8509,8 +8745,14 @@ do
                     State.didEnterTrialThisTurn = false
                     cleanupTrialMotion()
 
-                    status((isMain and "[MAIN " .. tostring(myStt) .. "]" or "[ALLY]")
-                        .. " ⏱ Trial quá 60s chưa xong → tự reset")
+                    status(
+                        (isMain
+                            and "[MAIN " .. tostring(myStt) .. "]"
+                            or "[ALLY]")
+                        .. " ⏱ in_trial quá "
+                        .. tostring(TRIAL_TIMEOUT_SECONDS)
+                        .. "s chưa xong → tự reset Character"
+                    )
 
                     if isMain then
                         State.setMyMainStatus("waiting")
@@ -8891,7 +9133,14 @@ do
         else
             if RuntimeState.inTrial then
                 -- Rời Trial bình thường (vào FFA hoặc ra ngoài): dừng watchdog/timer 60s của lần Trial này.
-                TrialTimeoutWatch.stopNormal()
+                -- Chỉ stop watchdog nếu Trial thật sự hoàn tất (ffup)
+                -- hoặc status đã rời in_trial. Nếu spatial detect hụt nhưng status
+                -- vẫn in_trial, giữ timer tới mốc 65s để tự recovery/reset.
+                if templeState() == "ffup"
+                    or State.getMainStatus(State.myName) ~= "in_trail"
+                then
+                    TrialTimeoutWatch.stopNormal()
+                end
                 State.trialStartedAt = 0
                 State.trialStartedCycleId = nil
                 if not isMain then
@@ -9239,12 +9488,17 @@ do
                     RuntimeState.firstLoopHit = true
                     status("Vòng chính đã chạy — đang đồng bộ…")
                 end
-                -- Behavior gốc: nếu cửa chưa mở thì MainLoop tiếp tục chờ/check độc lập với TempleDontPullCheck.
-                if not checktempledoor then checktempledoor = TempleDoorGate.ready() end
-                if not checktempledoor then
-                    status("Chờ mở cửa đền (CheckTempleDoor=" .. tostring(checktempledoor) .. ")")
+                -- GAME READY GATE thật: MainLoop vẫn được start sớm để UI/lifecycle không đổi,
+                -- nhưng tuyệt đối không chạy TempleDoor/FSM trước khi world đã ready.
+                if not RuntimeState.gameReady then
+                    status("Đang chờ game/world load hoàn tất...")
                 else
-                    local ok, err = xpcall(StateMachine.tick, debug.traceback)
+                    -- Behavior gốc: nếu cửa chưa mở thì MainLoop tiếp tục chờ/check độc lập với TempleDontPullCheck.
+                    if not checktempledoor then checktempledoor = TempleDoorGate.ready() end
+                    if not checktempledoor then
+                        status("Chờ mở cửa đền (CheckTempleDoor=" .. tostring(checktempledoor) .. ")")
+                    else
+                        local ok, err = xpcall(StateMachine.tick, debug.traceback)
                     if ok then
                         MainLoop._errStreak = 0
                     else
@@ -9255,6 +9509,7 @@ do
                             StateMachine.transition(StateMachine.S.ERROR_RECOVER, "too many errors")
                             task.wait(2)
                         end
+                    end
                     end
                 end
                 task.wait(Config.MAIN_TICK)
