@@ -742,9 +742,20 @@ end))
 CheckLocation = (function(v)return LocalPlayer:GetAttribute("CurrentLocation") == v end)
 CheckMap = (function(v) return workspace.Map:FindFirstChild(v) or false end)
 CheckTool = (function(v)
+    if type(v) ~= "string" or v == "" then return false end
     for _, x in next, {LocalPlayer.Backpack, Character} do
-    for _, v2 in next, x:GetChildren() do if v2:IsA("Tool") and (v2.Name == v or v2.Name:find(v)) then return true end
-    end end return false
+        if x then
+            for _, v2 in next, x:GetChildren() do
+                if v2:IsA("Tool") then
+                    local toolName = tostring(v2.Name or "")
+                    if toolName == v or toolName:find(v, 1, true) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
 end)
 CheckMaterial = (function(x)
     for _, v in pairs(COMMF_:InvokeServer("getInventory")) do if v.Type == "Material" then if v.Name == x then return v.Count end end
@@ -2025,7 +2036,87 @@ local function SharkV3SendKey(key, hold)
     VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
 end
 
-local function SharkV3ResetMovement()
+local SharkV3ResetMovement
+
+local function SharkV3EquipAnyWeapon()
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not char or not hum or hum.Health <= 0 then return nil end
+
+    local equipped = char:FindFirstChildOfClass("Tool")
+    if equipped then return equipped end
+
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer:FindFirstChild("Backpack")
+    if not backpack then return nil end
+
+    -- Prefer normal combat categories, but never require a specific weapon/melee.
+    for _, wantedTip in ipairs({"Melee", "Sword", "Blox Fruit", "Gun"}) do
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tostring(tool.ToolTip or "") == wantedTip then
+                pcall(function() hum:EquipTool(tool) end)
+                task.wait(0.08)
+                return tool
+            end
+        end
+    end
+
+    -- Fallback: equip any Tool the account currently has.
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            pcall(function() hum:EquipTool(tool) end)
+            task.wait(0.08)
+            return tool
+        end
+    end
+
+    return nil
+end
+
+local function SharkV3FightSeaMob(mob)
+    if not mob then return false end
+
+    SharkV3ResetMovement()
+    while mob and mob.Parent and not IsDied(Character) do
+        local hum = mob:FindFirstChildWhichIsA("Humanoid")
+        if not hum or hum.Health <= 0 then break end
+
+        local pivot = SharkV3GetPivot(mob)
+        if not pivot then break end
+
+        SetText("Shark V3 | Killing " .. tostring(mob.Name))
+        NeedSit = false
+        SetAimbotTarget(pivot.Position)
+
+        tweenToCFrame(pivot * CFrame.new(0, 20, 0), 35, function()
+            local h = mob and mob:FindFirstChildWhichIsA("Humanoid")
+            return not mob.Parent or not h or h.Health <= 0 or IsDied(Character)
+        end)
+
+        if IsDied(Character) then break end
+
+        SharkV3EquipAnyWeapon()
+        FastAttack(mob.Name)
+
+        for _, key in ipairs({"Z", "X", "C", "V", "F"}) do
+            if not mob.Parent then break end
+            local h = mob:FindFirstChildWhichIsA("Humanoid")
+            if not h or h.Health <= 0 then break end
+            if CheckCooldownSkill(key) then
+                SharkV3SendKey(key, 0.06)
+                task.wait(0.06)
+            end
+        end
+
+        task.wait(0.08)
+    end
+
+    SetAimbotTarget(false)
+    cancelProxyTween()
+    NeedSit = false
+    return true
+end
+
+SharkV3ResetMovement = function()
     NeedSit = false
     SetAimbotTarget(false)
     cancelProxyTween()
@@ -2130,8 +2221,8 @@ local function SharkV3FightSeaBeast(seaBeast)
 
         if IsDied(Character) then break end
 
-        EquipWeapon("Melee")
-        for _, key in ipairs({"Z", "X", "C"}) do
+        SharkV3EquipAnyWeapon()
+        for _, key in ipairs({"Z", "X", "C", "V", "F"}) do
             if not seaBeast.Parent then break end
             local h = seaBeast:FindFirstChild("Health")
             if not h or tonumber(h.Value) <= 0 then break end
@@ -2163,20 +2254,7 @@ end
 local function RunSharkV3Quest()
     local seaMob = SharkV3GetSeaMob()
     if seaMob then
-        SharkV3ResetMovement()
-            SetText("Shark V3 | Killing " .. tostring(seaMob.Name))
-
-        if seaMob:IsDescendantOf(workspace.Enemies) then
-            KillMonster(seaMob.Name)
-        else
-            local pivot = SharkV3GetPivot(seaMob)
-            if pivot then
-                tweenToCFrame(pivot, 20, function()
-                    local hum = seaMob:FindFirstChildWhichIsA("Humanoid")
-                    return not seaMob.Parent or not hum or hum.Health <= 0 or IsDied(Character)
-                end)
-            end
-        end
+        SharkV3FightSeaMob(seaMob)
         return
     end
 
@@ -2272,7 +2350,7 @@ task.spawn(function()
                     ScanV3Titles(true)
                 end
             else
-                if CheckSea(2) or (not CheckTool(getgenv().Settings["Focus Melee"]) and CurrentRace == "Fishman") then
+                if CheckSea(2) then
                     local SetRaceStatus = function(x) SetText(string.format("Upgrade Race V%s | Current: %s", x, CurrentRace)) end
                     if not LocalPlayer.Data.Race:FindFirstChild("Evolved") then
                         SetRaceStatus(2)
@@ -2370,40 +2448,9 @@ task.spawn(function()
                                 elseif CurrentRace == "Mink" then
                                     FarmMinkV3Chests()
                                 elseif CurrentRace == "Fishman" then
-                                    local TargetMelee = getgenv().Settings["Focus Melee"]
-                                    if CheckTool(TargetMelee) then
-                                        RunSharkV3Quest()
-                                    else
-                                        SharkV3ResetMovement()
-                                        local npcName = MeleeData[TargetMelee] or TargetMelee
-                                        local x, d = GetCFrameByNPC(npcName)
-                                        if x then
-                                            if d < 50 then
-                                                if TargetMelee == "Dragon Claw" then
-                                                    COMMF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
-                                                elseif TargetMelee == "Sharkman Karate" then
-                                                    local hasSharkman = CheckTool("Sharkman Karate") or CheckInventory("Sharkman Karate")
-                                                    if not hasSharkman and COMMF_:InvokeServer("BuySharkmanKarate", true) == 1 then
-                                                        local pos = CFrame.new(-2599.621826171875, 238.19833374023438, -10315.998046875)
-                                                        repeat task.wait() Tween(pos) until CheckDistance(pos) <= 30
-                                                        COMMF_:InvokeServer("BuySharkmanKarate")
-                                                    end
-                                                else
-                                                    COMMF_:InvokeServer("Buy"..TargetMelee:gsub("%s+", ""))
-                                                end
-                                            else
-                                                SetText("Travel To ".. npcName.. " NPC")
-                                                Tween(x)
-                                            end
-                                        else
-                                            SetText("Can't find ".. npcName.. " NPC")
-                                            Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-                                            LocalPlayer.CharacterAdded:Wait()
-                                            local needSea = GetMeleeTargetSea(TargetMelee)
-                                            if needSea == 2 then COMMF_:InvokeServer("TravelDressrosa")
-                                            elseif needSea == 3 then COMMF_:InvokeServer("TravelZou") end
-                                        end
-                                     end
+                                    -- Fishman V3 does not require a specific melee.
+                                    -- Use whatever combat tool is already available on the account.
+                                    RunSharkV3Quest()
                                 elseif CurrentRace == "Skypiea" then
                                     local x = nil
                                     for _, v in next, Players:GetPlayers() do
