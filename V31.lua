@@ -43,9 +43,7 @@ getgenv().Settings = getgenv().Settings or {
     ["Flower Touch Radius"] = 8;
 }
 
--- Đồng bộ cấu hình Races giữa getgenv().Races và getgenv().Settings["Races"]
 getgenv().Races = getgenv().Races or getgenv().Settings["Races"]
-
 getgenv().ChangeFolderOnCompleted = getgenv().ChangeFolderOnCompleted ~= false
 getgenv().id1 = getgenv().id1 or "........."
 getgenv().id2 = getgenv().id2 or "........."
@@ -94,6 +92,7 @@ GuiService = Services.GuiService
 TeleportService = Services.TeleportService
 NeedSit = false
 COMMF_ = ReplicatedStorage:WaitForChild("Remotes") and ReplicatedStorage.Remotes:WaitForChild("CommF_")
+ServerBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser")
 LocalPlayer = Players.LocalPlayer
 LocalPlayer.CharacterAdded:Connect(function(v)
     Character = v Humanoid = v:WaitForChild("Humanoid")
@@ -133,7 +132,6 @@ local guiVisible = true
 
 do
     local plr = LocalPlayer
-
     pcall(function()
         if COREGUI:FindFirstChild("KaitunRacesBF") then COREGUI.KaitunRacesBF:Destroy() end
         if COREGUI:FindFirstChild("Status") then COREGUI.Status:Destroy() end
@@ -613,52 +611,6 @@ FastAttack = (function(x)
     lastCallFA = tick()
 end)
 
-function IfTableHaveIndex(j)
-    for _ in j do return true end
-end
-
-local LastServersDataPulled, CachedServers
-function GetServers()
-    if LastServersDataPulled then
-        if os.time() - LastServersDataPulled < 60 then return CachedServers end
-    end
-    for i = 1, 100, 1 do
-        local data = game:GetService("ReplicatedStorage"):WaitForChild("__ServerBrowser"):InvokeServer(i)
-        if IfTableHaveIndex(data) then
-            LastServersDataPulled = os.time()
-            CachedServers = data
-            return data
-        end
-    end
-end
-
-HopServer = function(Reason, MaxPlayers, ForcedRegion)
-    local Servers = GetServers()
-    local ArrayServers = {}
-    MaxPlayers = MaxPlayers or 5
-    for i, v in Servers do
-        if v.Count <= MaxPlayers then
-            table.insert(ArrayServers, {
-                JobId = i,
-                Players = v.Count,
-                LastUpdate = v.__LastUpdate,
-                Region = v.Region
-            })
-        end
-    end
-    local ServerData
-    for i = 1, #ArrayServers do
-        while task.wait() do
-            local Index = math.random(1, #ArrayServers)
-            ServerData = ArrayServers[Index]
-            if ServerData then
-                if not ForcedRegion or ServerData.Regoin == ForcedRegion then break end
-            end
-        end
-        ReplicatedStorage:WaitForChild("__ServerBrowser"):InvokeServer('teleport', ServerData.JobId)
-    end
-end
-
 CheckDistance = function(a, b) b = b or Character
     local pa, pb = GetPosition(a), GetPosition(b)
     if pa and pb then return (pa - pb).Magnitude end
@@ -1064,7 +1016,7 @@ FarmBeli = (function(stopConditionFunc, ignoreY, ignoreFistStop)
 
                         if all >= getgenv().Settings["Max Chests"] then
                             SetText("Stopped: Max Chests reached")
-                            HopServer(8)
+                            HopServerBrowser()
                             break
                         elseif not ignoreFistStop and CheckTool("Fist of Darkness") then
                             SetText("Stopped: Fist of Darkness detected")
@@ -1100,7 +1052,7 @@ FarmBeli = (function(stopConditionFunc, ignoreY, ignoreFistStop)
         end
 
         if (ignoreFistStop or not CheckTool("Fist of Darkness")) and not CheckMonster("Darkbeard") and not stopConditionFunc() then
-            HopServer(10)
+            HopServerBrowser()
         end
     end
 end)
@@ -1231,6 +1183,161 @@ local function ScanV3Titles(force)
     titleCache.scanning = false
 
     return titleCache.map
+end
+
+-- ============================================================
+-- [ SERVER BROWSER V5.5 - 20 PAGES BATCH + 4/5/6 PLAYERS ]
+-- ============================================================
+local BROWSER_BATCH_PAGES = 20
+local BROWSER_WORKERS = 4
+local PAGES_PER_WORKER = 5
+local BROWSER_BATCH_MAX_WAIT = 3.0
+local BROWSER_MAX_PAGES = 100
+local CANDIDATE_BLACKLIST_SECONDS = 90
+
+local VISITED_FILE = "RaceV3Visited_" .. tostring(LocalPlayer.UserId) .. ".json"
+local Visited = {}
+
+local function loadVisited()
+    if type(isfile) ~= "function" or type(readfile) ~= "function" then return end
+    if not isfile(VISITED_FILE) then return end
+    local ok, decoded = pcall(function()
+        return HttpService:JSONDecode(readfile(VISITED_FILE))
+    end)
+    if ok and type(decoded) == "table" then Visited = decoded end
+end
+
+local function saveVisited()
+    if type(writefile) ~= "function" then return end
+    pcall(function() writefile(VISITED_FILE, HttpService:JSONEncode(Visited)) end)
+end
+
+local function blockJob(jobId, seconds)
+    if type(jobId) ~= "string" or jobId == "" then return end
+    Visited[jobId] = os.time() + (tonumber(seconds) or CANDIDATE_BLACKLIST_SECONDS)
+    saveVisited()
+end
+
+local function jobBlocked(jobId)
+    if type(jobId) ~= "string" or jobId == "" or jobId == game.JobId then return true end
+    local expires = tonumber(Visited[jobId])
+    if not expires then return false end
+    if expires <= os.time() then
+        Visited[jobId] = nil
+        return false
+    end
+    return true
+end
+
+loadVisited()
+
+local function makeCandidate(jobId, info)
+    if type(jobId) ~= "string" or jobId == "" or jobId == game.JobId then return nil end
+    if jobBlocked(jobId) then return nil end
+
+    local count = type(info) == "table" and tonumber(info.Count) or nil
+    if count ~= 4 and count ~= 5 and count ~= 6 then return nil end
+
+    return {
+        jobId = jobId,
+        players = count,
+        region = info.Region,
+        lastUpdate = info.__LastUpdate,
+    }
+end
+
+local function shuffleForAccount(list)
+    local seed = (LocalPlayer.UserId % 2147483647) + #list * 97
+    for i = #list, 2, -1 do
+        seed = (seed * 1103515245 + 12345) % 2147483647
+        local j = (seed % i) + 1
+        list[i], list[j] = list[j], list[i]
+    end
+end
+
+local function fetch20PageBatch(batchStart, rawTotals, usableTotals)
+    local batchEnd = math.min(BROWSER_MAX_PAGES, batchStart + BROWSER_BATCH_PAGES - 1)
+    local batch = { [4] = {}, [5] = {}, [6] = {} }
+    local pendingWorkers = 0
+    local batchOpen = true
+
+    for worker = 1, BROWSER_WORKERS do
+        local workerStart = batchStart + ((worker - 1) * PAGES_PER_WORKER)
+        local workerEnd = math.min(workerStart + PAGES_PER_WORKER - 1, batchEnd)
+
+        if workerStart <= batchEnd then
+            pendingWorkers += 1
+            task.spawn(function()
+                for page = workerStart, workerEnd do
+                    if not batchOpen then break end
+                    local ok, data = pcall(function()
+                        return ServerBrowser:InvokeServer(page)
+                    end)
+                    if batchOpen and ok and type(data) == "table" then
+                        for jobId, info in pairs(data) do
+                            local count = type(info) == "table" and tonumber(info.Count) or nil
+                            if count == 4 or count == 5 or count == 6 then
+                                rawTotals[count] += 1
+                                local cand = makeCandidate(jobId, info)
+                                if cand then
+                                    batch[count][#batch[count] + 1] = cand
+                                    usableTotals[count] += 1
+                                end
+                            end
+                        end
+                    end
+                    task.wait()
+                end
+                pendingWorkers -= 1
+            end)
+        end
+    end
+
+    local deadline = os.clock() + BROWSER_BATCH_MAX_WAIT
+    while pendingWorkers > 0 and os.clock() < deadline do
+        task.wait(0.02)
+    end
+    batchOpen = false
+    return batch, batchEnd
+end
+
+local isHopping = false
+function HopServerBrowser()
+    if isHopping then return false end
+    isHopping = true
+    cancelProxyTween()
+
+    local raw = { [4] = 0, [5] = 0, [6] = 0 }
+    local usable = { [4] = 0, [5] = 0, [6] = 0 }
+
+    for batchStart = 1, BROWSER_MAX_PAGES, BROWSER_BATCH_PAGES do
+        local batchEnd = math.min(BROWSER_MAX_PAGES, batchStart + BROWSER_BATCH_PAGES - 1)
+        SetText(string.format("Scanning Server Browser (4-6p)... batch %d-%d", batchStart, batchEnd))
+        
+        local batch, _ = fetch20PageBatch(batchStart, raw, usable)
+
+        for _, playersCount in ipairs({4, 5, 6}) do
+            if #batch[playersCount] > 0 then
+                shuffleForAccount(batch[playersCount])
+                for _, candidate in ipairs(batch[playersCount]) do
+                    if not jobBlocked(candidate.jobId) then
+                        blockJob(candidate.jobId, CANDIDATE_BLACKLIST_SECONDS)
+                        SetText(string.format("Hopping to %dp server | %s", candidate.players, string.sub(candidate.jobId, 1, 10)))
+                        
+                        pcall(function()
+                            ServerBrowser:InvokeServer("teleport", candidate.jobId)
+                        end)
+                        task.wait(4)
+                    end
+                end
+            end
+        end
+        task.wait(0.05)
+    end
+
+    isHopping = false
+    SetText("Rescanning Server Browser...")
+    return false
 end
 
 -- ============================================================
@@ -1424,6 +1531,52 @@ local function WriteCompletedRaces(reason)
 end
 
 -- ============================================================
+-- [ VÒNG LẶP RIÊNG: AUTO SPAM WENLOCKTOAD CHO ANGEL V2 -> V3 ]
+-- ============================================================
+task.spawn(function()
+    while task.wait(1) do
+        pcall(function()
+            local currentRace = GetCurrentRace()
+            local isV2 = LocalPlayer.Data 
+                and LocalPlayer.Data:FindFirstChild("Race") 
+                and LocalPlayer.Data.Race:FindFirstChild("Evolved") ~= nil
+            local isV3 = ScanV3Titles(false)["Skypiea"] == true
+
+            if currentRace == "Skypiea" and isV2 and not isV3 then
+                local beli = (LocalPlayer.Data:FindFirstChild("Beli") and LocalPlayer.Data.Beli.Value) or 0
+                if beli >= 2000000 then
+                    local ven1 = COMMF_:InvokeServer("Wenlocktoad", "1")
+                    if ven1 == 0 then
+                        COMMF_:InvokeServer("Wenlocktoad", "2")
+                        ScanV3Titles(true)
+                    elseif ven1 == 2 then
+                        COMMF_:InvokeServer("Wenlocktoad", "3")
+                        ScanV3Titles(true)
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ============================================================
+-- [ HUMAN V3 BOSS TRACKING LOGIC ]
+-- ============================================================
+local HumanBossKills = {}
+local HumanServerLocked = false
+
+local function CountAliveHumanBosses()
+    local count = 0
+    for _, name in ipairs({"Jeremy", "Orbitus", "Diamond"}) do
+        local m = CheckMonster(name)
+        if m and not IsDied(m) then
+            count += 1
+        end
+    end
+    return count
+end
+
+-- ============================================================
 -- [ MAIN CONTROLLER & WORKER LOOP ]
 -- ============================================================
 task.spawn(function()
@@ -1436,7 +1589,6 @@ task.spawn(function()
             local titleMap = ScanV3Titles(false)
             local enabledRaces, missingRaces = GetMissingEnabledRaces(titleMap)
 
-            -- 1. Khi tất cả race bật đều đã V3 -> Ghi file và đổi folder
             if #enabledRaces > 0 and #missingRaces == 0 then
                 WriteCompletedRaces("Upgrade Race V3 | Completed configured races")
                 return
@@ -1448,9 +1600,7 @@ task.spawn(function()
             local missingStandard = GetMissingEnabledFromOrder(STANDARD_RACE_ORDER, titleMap)
             local missingSpecial = GetMissingEnabledFromOrder(SPECIAL_RACE_ORDER, titleMap)
 
-            -- 2. Nếu race hiện tại đã V3 hoặc đang tắt -> Cần đổi sang race khác
             if isCurrentDone or not isCurrentEnabled then
-                -- Ưu tiên 1: Đổi/reroll tìm 4 race thường trước (Human, Mink, Fishman, Skypiea)
                 if #missingStandard > 0 then
                     if GetFragments() >= 3000 then
                         RerollRace("Seeking standard race missing V3: " .. table.concat(missingStandard, ", "))
@@ -1490,7 +1640,9 @@ task.spawn(function()
                                     end
                                 else
                                     if not CheckMonster("Dough King") and not CheckMonster("Cake Prince") then
-                                        SetText("Hop for Katakuri") task.wait(5) HopServer()
+                                        SetText("Hop for Katakuri (4-6p)...")
+                                        task.wait(2)
+                                        HopServerBrowser()
                                     end
                                 end
                             end
@@ -1499,7 +1651,6 @@ task.spawn(function()
                             COMMF_:InvokeServer("TravelZou") task.wait(2)
                         end
                     end
-                -- Ưu tiên 2: 4 race thường đã xong/tắt -> Đổi trực tiếp sang race đặc biệt (Cyborg/Ghoul)
                 elseif #missingSpecial > 0 then
                     local targetSpecial = missingSpecial[1]
                     ChangeToSpecialRace(targetSpecial, "Standard races completed/off. Changing to special race")
@@ -1508,7 +1659,6 @@ task.spawn(function()
                     ScanV3Titles(true)
                 end
             else
-                -- 3. Race hiện tại đang BẬT và CHƯA V3 -> Tiến hành làm Quest V2 / V3
                 if CheckSea(2) or (not CheckTool(getgenv().Settings["Focus Melee"]) and CurrentRace == "Fishman") then
                     local SetRaceStatus = function(x) SetText(string.format("Upgrade Race V%s | Current: %s", x, CurrentRace)) end
                     if not LocalPlayer.Data.Race:FindFirstChild("Evolved") then
@@ -1564,13 +1714,47 @@ task.spawn(function()
                             elseif ven1 == 2 then COMMF_:InvokeServer("Wenlocktoad", "3")
                             else
                                 if CurrentRace == "Human" then
-                                    for _, v2 in next, {workspace.Enemies, ReplicatedStorage} do
-                                        for _, v in next, v2:GetChildren() do
-                                            if table.find({"Jeremy", "Orbitus", "Diamond"}, v.Name) then
-                                                repeat task.wait() KillMonster(v.Name)
-                                                until not v:FindFirstChild("Humanoid") or v.Humanoid.Health <= 0
+                                    local aliveBosses = CountAliveHumanBosses()
+                                    local killedCount = 0
+                                    for _ in pairs(HumanBossKills) do killedCount += 1 end
+
+                                    -- Nếu server có >= 2 boss hoặc đã hạ >= 2 boss: Khóa server, kiên nhẫn diệt và chờ con thứ 3
+                                    if aliveBosses >= 2 or killedCount >= 2 then
+                                        HumanServerLocked = true
+                                    end
+
+                                    if HumanServerLocked or aliveBosses > 0 then
+                                        local foundAny = false
+                                        for _, v2 in next, {workspace.Enemies, ReplicatedStorage} do
+                                            for _, v in next, v2:GetChildren() do
+                                                if table.find({"Jeremy", "Orbitus", "Diamond"}, v.Name) then
+                                                    local hum = v:FindFirstChildWhichIsA("Humanoid")
+                                                    if hum and hum.Health > 0 then
+                                                        foundAny = true
+                                                        repeat task.wait()
+                                                            SetText(string.format("Killing %s (Human V3: %d/3)", v.Name, killedCount))
+                                                            KillMonster(v.Name)
+                                                        until not v or not v:FindFirstChild("Humanoid") or v.Humanoid.Health <= 0
+                                                        
+                                                        HumanBossKills[v.Name] = true
+                                                        killedCount = 0
+                                                        for _ in pairs(HumanBossKills) do killedCount += 1 end
+                                                        if killedCount >= 2 then
+                                                            HumanServerLocked = true
+                                                        end
+                                                    end
+                                                end
                                             end
                                         end
+                                        if not foundAny and HumanServerLocked then
+                                            SetText(string.format("Human V3: Killed %d/3 -> Waiting 3rd boss to respawn...", killedCount))
+                                            task.wait(2)
+                                        end
+                                    else
+                                        -- Server < 2 boss và chưa giết được 2 boss -> Tự động hop Server Browser
+                                        SetText(string.format("Human V3: Only %d boss alive -> Hopping Server (4-6p)...", aliveBosses))
+                                        task.wait(1.5)
+                                        HopServerBrowser()
                                     end
                                 elseif CurrentRace == "Mink" then
                                     FarmBeli(function() return (ScanV3Titles(false)["Mink"] == true) end, nil, true)
@@ -1669,7 +1853,9 @@ task.spawn(function()
                                             end
                                         until not x or x.Humanoid.Health <= 0
                                     else
-                                        SetText("Finding Skypiea Player") HopServer(10)
+                                        SetText("Finding Skypiea Player (4-6p)...")
+                                        task.wait(2)
+                                        HopServerBrowser()
                                     end
                                 elseif CurrentRace == "Cyborg" then
                                     local venlock = COMMF_:InvokeServer("Wenlocktoad", "2")
@@ -1698,8 +1884,9 @@ task.spawn(function()
                                             if CheckTool("Fruit") then
                                                 COMMF_:InvokeServer("Wenlocktoad", "3")
                                             else
-                                                SetText("Not Found Fruit, Hop Server") task.wait(3)
-                                                HopServer(10)
+                                                SetText("Not Found Fruit, Hopping (4-6p)...")
+                                                task.wait(2)
+                                                HopServerBrowser()
                                             end
                                         end
                                     end
