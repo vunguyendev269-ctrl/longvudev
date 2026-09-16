@@ -968,7 +968,7 @@ local function ExitTheChar()
 end
 
 -- ============================================================
--- PROXY TWEEN SYSTEM
+-- PROXY TWEEN SYSTEM (Tối ưu chống giật & chống loop cancel)
 -- ============================================================
 local TWEEN_SPEED = 160
 local ACTIVE_PROXY_MOVE = nil
@@ -1033,8 +1033,6 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         ExitTheChar()
     end
 
-    cancelProxyTween()
-
     local startPos = (moveTarget and moveTarget:IsA("BasePart")) and moveTarget.Position or root.Position
     local distance = (startPos - targetCFrame.Position).Magnitude
     if distance <= arriveDistance then
@@ -1047,6 +1045,15 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         end
         return true, distance
     end
+
+    -- CHỐNG GIẬT: Nếu đang di chuyển đến cùng một vị trí (< 4 studs), tiếp tục giữ Tween thay vì huỷ tạo lại
+    if ACTIVE_PROXY_MOVE and not ACTIVE_PROXY_MOVE.cleaned and ACTIVE_PROXY_MOVE.moveTarget == moveTarget then
+        if (ACTIVE_PROXY_MOVE.target.Position - targetCFrame.Position).Magnitude <= 4 then
+            return true, distance
+        end
+    end
+
+    cancelProxyTween()
 
     PROXY_MOVE_SERIAL = PROXY_MOVE_SERIAL + 1
     local moveId = PROXY_MOVE_SERIAL
@@ -1062,11 +1069,14 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
     proxy.CFrame = CFrame.new(startPos)
     proxy.Parent = workspace
 
+    -- Tắt va chạm 1 lần duy nhất trên các part hiện có để tránh lag GetDescendants mỗi frame
     local oldCollide = {}
+    local charPartsList = {}
     for _, obj in ipairs(char:GetDescendants()) do
         if obj:IsA("BasePart") then
             oldCollide[obj] = obj.CanCollide
             obj.CanCollide = false
+            table.insert(charPartsList, obj)
         end
     end
 
@@ -1076,8 +1086,10 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         humanoid = hum,
         root = root,
         proxy = proxy,
+        target = targetCFrame,
         moveTarget = moveTarget,
         oldCollide = oldCollide,
+        charParts = charPartsList,
         cleaned = false,
     }
 
@@ -1103,9 +1115,11 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
             return
         end
 
-        for _, obj in ipairs(current:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                obj.CanCollide = false
+        -- Duyệt mảng part đã cache sẵn, triệt tiêu lag CPU
+        for i = 1, #move.charParts do
+            local p = move.charParts[i]
+            if p and p.Parent then
+                p.CanCollide = false
             end
         end
 
@@ -1320,9 +1334,9 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 
 CheckOwnerBoat = function()
-    if workspace.Boats:GetChildren() == 0 then return false end
+    if not workspace:FindFirstChild("Boats") or workspace.Boats:GetChildren() == 0 then return false end
     for _, v in next, workspace.Boats:GetChildren() do
-        if v:IsA("Model") and v:FindFirstChild("Owner") and tostring(v.Owner.Value) == LocalPlayer.Name and v.Humanoid.Value > 0 and CheckDistance(v) <= 6000 then
+        if v:IsA("Model") and v:FindFirstChild("Owner") and tostring(v.Owner.Value) == LocalPlayer.Name and v:FindFirstChild("Humanoid") and v.Humanoid.Value > 0 and CheckDistance(v) <= 6000 then
             return v
         end
     end
@@ -2010,76 +2024,135 @@ task.spawn(function()
                                     FarmBeli(function() return (ScanV3Titles(false)["Mink"] == true) end, nil, true)
                                 elseif CurrentRace == "Fishman" then
                                     -- ============================================================
-                                    -- [ BẢN GỐC FISHMAN V3 (Speed: 150 studs/s) ]
+                                    -- [ BẢN GỐC FISHMAN V3 CHUẨN XÁC ]
                                     -- ============================================================
-                                    local TargetMelee = getgenv().Settings["Focus Melee"]
-                                    if CheckTool(TargetMelee) then
-                                        local function CE(x) return workspace.Enemies:FindFirstChild(x) or workspace.SeaBeasts:FindFirstChild(x) end
-                                        local e = CE("Piranha") or CE("Shark") or CE("Fish Crew Member")
-                                        local v = CE("SeaBeast1")
-                                        if e then Character.Humanoid.Sit = false
-                                            repeat task.wait() KillMonster(e.Name)
-                                            until not e or e.Humanoid.Health <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0
-                                        elseif v then Character.Humanoid.Sit = false
-                                            repeat task.wait()
+                                    local function SharkV3GetPlayerBoat()
+                                        for _, boat in next, workspace.Boats:GetChildren() do
+                                            if boat:IsA("Model") then
+                                                local owner = boat:FindFirstChild("Owner")
+                                                local hd = boat:FindFirstChild("Humanoid")
+                                                local hp = hd and tonumber(hd.Value) or 0
+                                                if owner and tostring(owner.Value) == LocalPlayer.Name and hp > 0 then
+                                                    return boat
+                                                end
+                                            end
+                                        end
+                                        return CheckOwnerBoat()
+                                    end
+
+                                    local function SharkV3GetSeaBeast()
+                                        if not workspace:FindFirstChild("SeaBeasts") then return nil end
+                                        for _, seaBeast in next, workspace.SeaBeasts:GetChildren() do
+                                            local health = seaBeast:FindFirstChild("Health")
+                                            local hp = health and tonumber(health.Value) or 0
+                                            if hp > 30000 then
+                                                return seaBeast
+                                            end
+                                        end
+                                        return nil
+                                    end
+
+                                    local function SharkV3GetSeaMob()
+                                        return workspace.Enemies:FindFirstChild("Shark")
+                                            or workspace.Enemies:FindFirstChild("Piranha")
+                                            or ReplicatedStorage:FindFirstChild("Shark")
+                                            or ReplicatedStorage:FindFirstChild("Piranha")
+                                    end
+
+                                    local function SharkV3SendKey(key, hold)
+                                        local keyCode = Enum.KeyCode[tostring(key)] or key
+                                        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+                                        task.wait(hold or 0.05)
+                                        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+                                    end
+
+                                    local function SharkV3GetPivot(model)
+                                        if not model then return nil end
+                                        local ok, pivot = pcall(function()
+                                            return model.WorldPivot
+                                        end)
+                                        if ok and typeof(pivot) == "CFrame" then
+                                            return pivot
+                                        end
+                                        ok, pivot = pcall(function()
+                                            return model:GetPivot()
+                                        end)
+                                        if ok and typeof(pivot) == "CFrame" then
+                                            return pivot
+                                        end
+                                        local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
+                                        return hrp and hrp.CFrame or nil
+                                    end
+
+                                    local seaBeast = SharkV3GetSeaBeast()
+                                    if not seaBeast then
+                                        local boat = SharkV3GetPlayerBoat()
+                                        local sharkMob = SharkV3GetSeaMob()
+
+                                        if sharkMob then
+                                            SetText("Shark V3 | Killing " .. tostring(sharkMob.Name))
+                                            if sharkMob:IsDescendantOf(workspace.Enemies) then
+                                                KillMonster(tostring(sharkMob.Name))
+                                            else
+                                                local hrp = sharkMob:FindFirstChild("HumanoidRootPart") or sharkMob:FindFirstChildWhichIsA("BasePart")
+                                                if hrp then Tween(hrp.CFrame) end
+                                            end
+                                            return
+                                        end
+
+                                        if not boat then
+                                            local buyBoatPos = CFrame.new(-14, 10, 2955)
+                                            SetText("Shark V3 | Buying PirateBrigade boat")
+                                            Tween(buyBoatPos)
+                                            if CheckDistance(buyBoatPos) < 10 then
+                                                COMMF_:InvokeServer("BuyBoat", "PirateBrigade")
+                                            end
+                                        elseif boat:FindFirstChild("VehicleSeat") then
+                                            local targetBoatCFrame = CFrame.new(-67, 5.5647872686386108, 4205 + math.random(1, 400))
+                                            if CheckDistance(boat.VehicleSeat.CFrame, targetBoatCFrame) > 800 then
+                                                SetText("Shark V3 | Move boat to sea")
+                                                boat.VehicleSeat.CFrame = targetBoatCFrame
+                                            elseif CheckDistance(boat.VehicleSeat.CFrame) > 5 then
+                                                SetText("Shark V3 | Tween to boat seat")
+                                                Tween(boat.VehicleSeat.CFrame + Vector3.new(0, math.random(-1, 2), 0))
+                                            else
+                                                SetText("Shark V3 | Waiting for Sea Beast")
+                                            end
+                                        else
+                                            SetText("Shark V3 | Boat missing VehicleSeat")
+                                        end
+                                    else
+                                        if not CheckTool("Sharkman Karate") and not CheckInventory("Sharkman Karate") then
+                                            SetText("Shark V3 | Buy Sharkman Karate")
+                                            COMMF_:InvokeServer("BuySharkmanKarate")
+                                        end
+
+                                        repeat
+                                            task.wait()
+                                            local pivot = SharkV3GetPivot(seaBeast)
+                                            if not pivot then break end
+                                            local health = seaBeast:FindFirstChild("Health")
+                                            local hpText = health and tostring(math.floor(tonumber(health.Value) or 0)) or "nil"
+                                            SetText("Shark V3 | Killing Sea Beast | HP: " .. hpText)
+
+                                            if pivot.Position.Y >= -179 then
+                                                local lockCFrame = pivot * CFrame.new(0, 300, 0)
+                                                Tween(lockCFrame)
+                                                SetAimbotTarget(lockCFrame)
+                                                for _, key in ipairs({"Z", "X", "C"}) do
+                                                    EquipWeapon((math.random(1, 2) == 1) and "Melee" or "Sword")
+                                                    SharkV3SendKey(key, 0.05)
+                                                end
                                                 FastAttack()
-                                                SetAimbotTarget(v.HumanoidRootPart)
-                                                Tween(v.HumanoidRootPart.CFrame * CFrame.new(0, (v.HumanoidRootPart.Position.Y > -300 and 500 or 1000), 0))
-                                                EquipWeapon(({"Melee", "Sword", "Gun", "Blox Fruit"})[math.random(4)])
-                                                local k = ({"Z", "X", "C", "V", "F"})[math.random(5)]
-                                                if not Character:FindFirstChild("Portal-Portal") then
-                                                    if CheckCooldownSkill(k) then
-                                                        PressKeyEvent(k, 0.5)
-                                                    end
-                                                end
-                                            until not v or not v:FindFirstChild("Health") or v.Health.Value <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0
-                                        else
-                                            local BOAT = CheckOwnerBoat()
-                                            if BOAT then
-                                                if not Character.Humanoid.Sit then Tween(BOAT.VehicleSeat.CFrame)
-                                                    NeedSit = true
-                                                else Tween(CFrame.new(-1000000, 49, 1000000), BOAT:FindFirstChild("Engine"))
-                                                task.delay(5, function() Tween(false) end)
-                                                end
                                             else
-                                                local PlaceNPC = Vector3.new(-1, 10, 2960)
-                                                if (HumanoidRootPart.Position - PlaceNPC).Magnitude < 50 then
-                                                    COMMF_:InvokeServer("BuyBoat", LocalPlayer.Team.Name == "Marine" and "PirateSloop" or "PirateBrigade")
-                                                else
-                                                    Character.Humanoid.Sit = false
-                                                    Tween(CFrame.new(PlaceNPC))
-                                                end
+                                                Tween(pivot * CFrame.new(0, 900, 0))
                                             end
-                                        end
-                                    else Character.Humanoid.Sit = false
-                                        local npcName = MeleeData[TargetMelee] or TargetMelee
-                                        local x, d = GetCFrameByNPC(npcName)
-                                        if x then
-                                            if d < 50 then
-                                                if TargetMelee == "Dragon Claw" then
-                                                    COMMF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
-                                                elseif TargetMelee == "Sharkman Karate" then
-                                                    local hasSharkman = CheckTool("Sharkman Karate") or CheckInventory("Sharkman Karate")
-                                                    if not hasSharkman and COMMF_:InvokeServer("BuySharkmanKarate", true) == 1 then
-                                                        local pos = CFrame.new(-2599.621826171875, 238.19833374023438, -10315.998046875)
-                                                        repeat task.wait() Tween(pos) until CheckDistance(pos) <= 30
-                                                        COMMF_:InvokeServer("BuySharkmanKarate")
-                                                    end
-                                                else
-                                                    COMMF_:InvokeServer("Buy"..TargetMelee:gsub("%s+", ""))
-                                                end
-                                            else
-                                                SetText("Travel To ".. npcName.. " NPC")
-                                                Tween(x)
-                                            end
-                                        else
-                                            SetText("Can't find ".. npcName.. " NPC")
-                                            Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-                                            LocalPlayer.CharacterAdded:Wait()
-                                            local needSea = GetMeleeTargetSea(TargetMelee)
-                                            if needSea == 2 then COMMF_:InvokeServer("TravelDressrosa")
-                                            elseif needSea == 3 then COMMF_:InvokeServer("TravelZou") end
-                                        end
+                                        until not seaBeast or not seaBeast.Parent or not seaBeast:FindFirstChild("Health") or seaBeast.Health.Value <= 0 or IsDied(Character)
+
+                                        SetAimbotTarget(false)
+                                        COMMF_:InvokeServer("Wenlocktoad", "3")
+                                        SetText("Shark V3 | Done Sea Beast | Talked Wenlocktoad")
+                                        task.wait(1)
                                     end
                                 elseif CurrentRace == "Skypiea" then
                                     local x = nil
