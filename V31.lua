@@ -1,46 +1,46 @@
 local MeleeData = {
-    ["Black Leg"] = "Dark Step Teacher";
-    ["Electro"] = "Mad Scientist";
-    ["Fishman Karate"] = "Water Kung-fu Teacher";
-    ["Dragon Claw"] = "Sabi";
-    ["Superhuman"] = "Martial Arts Master";
-    ["Death Step"] = "Phoeyu, the Reformed";
-    ["Sharkman Karate"] = "Sharkman Teacher";
-    ["Electric Claw"] = "Previous Hero";
-    ["Dragon Talon"] = "Uzoth";
-    ["Godhuman"] = "Ancient Monk";
-    ["Sanguine Art"] = "Shafi";
-};
+    ["Black Leg"] = "Dark Step Teacher",
+    ["Electro"] = "Mad Scientist",
+    ["Fishman Karate"] = "Water Kung-fu Teacher",
+    ["Dragon Claw"] = "Sabi",
+    ["Superhuman"] = "Martial Arts Master",
+    ["Death Step"] = "Phoeyu, the Reformed",
+    ["Sharkman Karate"] = "Sharkman Teacher",
+    ["Electric Claw"] = "Previous Hero",
+    ["Dragon Talon"] = "Uzoth",
+    ["Godhuman"] = "Ancient Monk",
+    ["Sanguine Art"] = "Shafi",
+}
 
 getgenv().Settings = getgenv().Settings or {
     ["API"] = {
-        ["URL"] = "";
-        ["Method"] = "GET";
+        ["URL"] = "",
+        ["Method"] = "GET",
         ["Headers"] = {
-            ["Content-Type"] = "application/json";
-        };
+            ["Content-Type"] = "application/json",
+        },
         ["Body"] = {
-            ["Player"] = "";
-            ["PlayerId"] = "";
-        };
-    };
-    ["Focus Melee"] = "Sharkman Karate";
+            ["Player"] = "",
+            ["PlayerId"] = "",
+        },
+    },
+    ["Focus Melee"] = "Sharkman Karate",
     ["Races"] = {
-        ["Human"] = true;
-        ["Mink"] = false;      
-        ["Fishman"] = false;   
-        ["Skypiea"] = false;   
-        ["Cyborg"] = false;
-        ["Ghoul"] = false;
-    };
-    ["Max Chests"] = 50;
-    ["Skip Chest Delay"] = 1;
-    ["Black Screen"] = false;
-    ["Reset After Collect Chests"] = 10;
-    ["Katakuri Progress"] = 300;
-    ["Fragments"] = 5000;
-    ["Chest Touch Radius"] = 8;
-    ["Flower Touch Radius"] = 8;
+        ["Human"] = true,
+        ["Mink"] = false,
+        ["Fishman"] = false,
+        ["Skypiea"] = false,
+        ["Cyborg"] = false,
+        ["Ghoul"] = false,
+    },
+    ["Max Chests"] = 50,
+    ["Skip Chest Delay"] = 1,
+    ["Black Screen"] = false,
+    ["Reset After Collect Chests"] = 10,
+    ["Katakuri Progress"] = 300,
+    ["Fragments"] = 5000,
+    ["Chest Touch Radius"] = 8,
+    ["Flower Touch Radius"] = 8,
 }
 
 getgenv().Races = getgenv().Races or getgenv().Settings["Races"]
@@ -49,8 +49,8 @@ getgenv().id1 = getgenv().id1 or "........."
 getgenv().id2 = getgenv().id2 or "........."
 
 local SeaMelee = {
-    [2] = {"Dragon Claw", "Superhuman", "Death Step", "Sharkman Karate"};
-    [3] = {"Electric Claw", "Dragon Talon", "Godhuman", "Sanguine Art"};
+    [2] = {"Dragon Claw", "Superhuman", "Death Step", "Sharkman Karate"},
+    [3] = {"Electric Claw", "Dragon Talon", "Godhuman", "Sanguine Art"},
 }
 local function GetMeleeTargetSea(meleeName)
     if type(meleeName) ~= "string" then return 1 end
@@ -1046,7 +1046,7 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         return true, distance
     end
 
-    -- CHỐNG GIẬT: Nếu đang di chuyển đến cùng một vị trí (< 4 studs), tiếp tục giữ Tween thay vì huỷ tạo lại
+    -- CHỐNG GIẬT: Nếu đang di chuyển đến cùng một vị trí (< 4 studs), tiếp tục giữ Tween
     if ACTIVE_PROXY_MOVE and not ACTIVE_PROXY_MOVE.cleaned and ACTIVE_PROXY_MOVE.moveTarget == moveTarget then
         if (ACTIVE_PROXY_MOVE.target.Position - targetCFrame.Position).Magnitude <= 4 then
             return true, distance
@@ -1069,7 +1069,6 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
     proxy.CFrame = CFrame.new(startPos)
     proxy.Parent = workspace
 
-    -- Tắt va chạm 1 lần duy nhất trên các part hiện có để tránh lag GetDescendants mỗi frame
     local oldCollide = {}
     local charPartsList = {}
     for _, obj in ipairs(char:GetDescendants()) do
@@ -1115,7 +1114,6 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
             return
         end
 
-        -- Duyệt mảng part đã cache sẵn, triệt tiêu lag CPU
         for i = 1, #move.charParts do
             local p = move.charParts[i]
             if p and p.Parent then
@@ -2024,7 +2022,7 @@ task.spawn(function()
                                     FarmBeli(function() return (ScanV3Titles(false)["Mink"] == true) end, nil, true)
                                 elseif CurrentRace == "Fishman" then
                                     -- ============================================================
-                                    -- [ BẢN GỐC FISHMAN V3 CHUẨN XÁC ]
+                                    -- [ BẢN GỐC FISHMAN V3 (Speed: 150 studs/s) ]
                                     -- ============================================================
                                     local function SharkV3GetPlayerBoat()
                                         for _, boat in next, workspace.Boats:GetChildren() do
