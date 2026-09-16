@@ -104,7 +104,7 @@ if LocalPlayer.Character then
     HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart") or Character:WaitForChild("HumanoidRootPart")
 end
 
-StarterGui:SetCore("SendNotification", {Title = "Executed", Text = "Loading… Please wait", Subtext = "Kaitun Races By Centramil", Duration = 5})
+StarterGui:SetCore("SendNotification", {Title = "Executed", Text = "Loading… Please wait", Subtext = "VuNguyen KaitunV3 Premium", Duration = 5})
 if not game:IsLoaded() or workspace.DistributedGameTime <= 10 then
     local WFGTL = COREGUI:FindFirstChild("WFGTL") or Instance.new("Hint", COREGUI)
     WFGTL.Text = "Just a moment... Waiting while the game loads - This won't take long!"
@@ -126,9 +126,145 @@ task.spawn(function()
 end)
 repeat task.wait(2) until Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChildWhichIsA("Humanoid") and Character:IsDescendantOf(workspace.Characters) 
 
+-- ============================================================
+-- [ EXACT TITLE NAME V3 CHECKER (Forward Declarations) ]
+-- ============================================================
+local TITLE_FAST_SCAN_INTERVAL = 5
+local TITLE_FAST_SCAN_LIMIT = 3
+local TITLE_SCAN_INTERVAL = 30
+
+local TITLE_TARGETS = {
+    { title = "Full Power", configRace = "Human", raceV3 = "Human V3" },
+    { title = "Godspeed", configRace = "Mink", raceV3 = "Rabbit V3" },
+    { title = "Warrior of the Sea", configRace = "Fishman", raceV3 = "Shark V3" },
+    { title = "Perfect Being", configRace = "Skypiea", raceV3 = "Angel V3" },
+    { title = "War Machine", configRace = "Cyborg", raceV3 = "Cyborg V3" },
+    { title = "Hell Hound", configRace = "Ghoul", raceV3 = "Ghoul V3" },
+}
+
+local TITLE_FIELDS = {
+    title = true,
+    name = true,
+    titlename = true,
+    displayname = true,
+}
+
+local titleCache = {
+    initialized = false,
+    scanning = false,
+    lastScan = 0,
+    scanCount = 0,
+    currentInterval = TITLE_FAST_SCAN_INTERVAL,
+    map = {},
+}
+
+local function GetTitleScanInterval()
+    if titleCache.scanCount < TITLE_FAST_SCAN_LIMIT then
+        return TITLE_FAST_SCAN_INTERVAL
+    end
+    return TITLE_SCAN_INTERVAL
+end
+
+local function NormalizeText(value)
+    return tostring(value or ""):lower():gsub("[^%w]", "")
+end
+
+local function ExactTitleMatch(targetTitle, value)
+    return NormalizeText(targetTitle) == NormalizeText(value)
+end
+
+local function WalkTables(value, path, depth, visited, callback)
+    if type(value) ~= "table" or depth > 10 then return end
+    if visited[value] then return end
+    visited[value] = true
+    callback(value, path)
+
+    for key, child in pairs(value) do
+        if type(child) == "table" then
+            WalkTables(child, path .. "[" .. tostring(key) .. "]", depth + 1, visited, callback)
+        end
+    end
+end
+
+local function NodeHasExactTitle(node, targetTitle)
+    for key, value in pairs(node) do
+        local normalizedKey = NormalizeText(key)
+        if type(value) ~= "table" and TITLE_FIELDS[normalizedKey] and ExactTitleMatch(targetTitle, value) then
+            return true
+        end
+        if type(key) == "string" and ExactTitleMatch(targetTitle, key) then
+            return true
+        end
+    end
+    return false
+end
+
+local function InvokeGetTitles(timeoutSeconds)
+    local completed = false
+    local okResult = false
+    local dataResult = nil
+
+    task.spawn(function()
+        local ok, data = pcall(function()
+            return COMMF_:InvokeServer("getTitles")
+        end)
+        okResult = ok
+        dataResult = ok and data or nil
+        completed = true
+    end)
+
+    local deadline = tick() + (tonumber(timeoutSeconds) or 2)
+    repeat task.wait(0.05) until completed or tick() >= deadline
+
+    return okResult, dataResult
+end
+
+local function ScanV3Titles(force)
+    if titleCache.scanning then return titleCache.map end
+
+    local requiredInterval = GetTitleScanInterval()
+    if not force and titleCache.initialized and tick() - titleCache.lastScan < requiredInterval then
+        return titleCache.map
+    end
+
+    titleCache.scanning = true
+    local foundMap = {}
+    local remoteOk, remoteData = InvokeGetTitles(2)
+
+    for _, target in ipairs(TITLE_TARGETS) do
+        local found = false
+        if remoteOk and type(remoteData) == "table" then
+            WalkTables(remoteData, "getTitles", 0, {}, function(node)
+                if NodeHasExactTitle(node, target.title) then
+                    found = true
+                end
+            end)
+        end
+        foundMap[target.configRace] = found
+        foundMap[target.raceV3] = found
+    end
+
+    titleCache.map = foundMap
+    titleCache.lastScan = tick()
+    titleCache.scanCount = titleCache.scanCount + 1
+    titleCache.currentInterval = GetTitleScanInterval()
+    titleCache.initialized = true
+    titleCache.scanning = false
+
+    return titleCache.map
+end
+
+-- ============================================================
+-- [ NEW REDESIGNED MODERN UI (VuNguyen KaitunV3 Premium) ]
+-- ============================================================
 local KaitunGuiStatusLabel
 local KaitunGuiBlur
 local guiVisible = true
+
+local function formatNumber(n)
+    local str = tostring(math.floor(tonumber(n) or 0))
+    return str:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+end
 
 do
     local plr = LocalPlayer
@@ -145,175 +281,7 @@ do
     KaitunGuiBlur.Size = 24
     KaitunGuiBlur.Parent = Lighting
 
-    local CoinCard_1 = Instance.new("ScreenGui")
-    local DropShadowHolder_1 = Instance.new("Frame")
-    local Main_1 = Instance.new("Frame")
-    local UICorner_1 = Instance.new("UICorner")
-    local UIStroke_1 = Instance.new("UIStroke")
-    local Divider_1 = Instance.new("Frame")
-    local CharacterLabel = Instance.new("TextLabel")
-    local LevelLabel_1 = Instance.new("TextLabel")
-    local RaceLabel_1 = Instance.new("TextLabel")
-    local BeliLabel_1 = Instance.new("TextLabel")
-    local FragLabel_1 = Instance.new("TextLabel")
-    local Top_1 = Instance.new("TextLabel")
-    local UIGradient_1 = Instance.new("UIGradient")
-    local UnderStats_1 = Instance.new("TextLabel")
-    local UIGradient_2 = Instance.new("UIGradient")
-    local UnderRace_1 = Instance.new("TextLabel")
-    local UIGradient_3 = Instance.new("UIGradient")
-    local RaceContainer = Instance.new("Frame")
-    local DropShadow_1 = Instance.new("ImageLabel")
-
-    CoinCard_1.Name = "KaitunRacesBF"
-    CoinCard_1.Parent = COREGUI
-    CoinCard_1.ResetOnSpawn = false
-    CoinCard_1.DisplayOrder = 20
-
-    DropShadowHolder_1.AnchorPoint = Vector2.new(0.5, 0.5)
-    DropShadowHolder_1.BackgroundColor3 = Color3.fromRGB(163, 163, 163)
-    DropShadowHolder_1.BackgroundTransparency = 1
-    DropShadowHolder_1.Name = "DropShadowHolder"
-    DropShadowHolder_1.Parent = CoinCard_1
-    DropShadowHolder_1.Position = UDim2.new(0.5, 0, 0.5, 0)
-    DropShadowHolder_1.Size = UDim2.new(0, 620, 0, 390)
-    DropShadowHolder_1.ZIndex = 1
-
-    Main_1.AnchorPoint = Vector2.new(0.5, 0.5)
-    Main_1.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    Main_1.BackgroundTransparency = 0.5
-    Main_1.Name = "Main"
-    Main_1.Parent = DropShadowHolder_1
-    Main_1.Position = UDim2.new(0.5, 0, 0.5, 0)
-    Main_1.Size = UDim2.new(1, -47, 1, -47)
-
-    UICorner_1.CornerRadius = UDim.new(0, 8)
-    UICorner_1.Parent = Main_1
-
-    UIStroke_1.Color = Color3.fromRGB(255, 80, 80)
-    UIStroke_1.Thickness = 2.5
-    UIStroke_1.Parent = Main_1
-
-    Divider_1.BorderSizePixel = 0
-    Divider_1.BackgroundColor3 = Color3.fromRGB(210, 210, 210)
-    Divider_1.Name = "Divider"
-    Divider_1.Parent = Main_1
-    Divider_1.Position = UDim2.new(0.05, 0, 0.205, 0)
-    Divider_1.Size = UDim2.new(0.90, 0, 0, 2)
-
-    Top_1.BackgroundTransparency = 1
-    Top_1.Name = "Top"
-    Top_1.Parent = Main_1
-    Top_1.AnchorPoint = Vector2.new(0.5, 0)
-    Top_1.Position = UDim2.new(0.5, 0, 0.055, 0)
-    Top_1.Size = UDim2.new(0.8, 0, 0, 24)
-    Top_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
-    Top_1.Text = "Kaitun Races BF"
-    Top_1.TextColor3 = Color3.fromRGB(255, 80, 80)
-    Top_1.TextSize = 22
-    Top_1.TextXAlignment = Enum.TextXAlignment.Center
-
-    UIGradient_1.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))
-    }
-    UIGradient_1.Parent = Top_1
-
-    UnderStats_1.BackgroundTransparency = 1
-    UnderStats_1.Name = "UnderStats"
-    UnderStats_1.Parent = Main_1
-    UnderStats_1.AnchorPoint = Vector2.new(0.5, 0)
-    UnderStats_1.Position = UDim2.new(0.5, 0, 0.225, 2)
-    UnderStats_1.Size = UDim2.new(0.4, 0, 0, 18)
-    UnderStats_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
-    UnderStats_1.Text = "Account Stats"
-    UnderStats_1.TextColor3 = Color3.fromRGB(255, 255, 255)
-    UnderStats_1.TextSize = 16
-    UnderStats_1.TextXAlignment = Enum.TextXAlignment.Center
-
-    UIGradient_2.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))
-    }
-    UIGradient_2.Parent = UnderStats_1
-
-    local function setupCenterStat(lbl, yPos)
-        lbl.BackgroundTransparency = 1
-        lbl.Parent = Main_1
-        lbl.AnchorPoint = Vector2.new(0.5, 0)
-        lbl.Position = UDim2.new(0.5, 0, yPos, 0)
-        lbl.Size = UDim2.new(0.82, 0, 0, 18)
-        lbl.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
-        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-        lbl.TextSize = 16
-        lbl.TextXAlignment = Enum.TextXAlignment.Center
-        lbl.RichText = true
-    end
-
-    CharacterLabel.Name = "CharacterLabel"
-    setupCenterStat(CharacterLabel, 0.285)
-    CharacterLabel.Text = "Character: N/A"
-
-    LevelLabel_1.Name = "LevelLabel"
-    setupCenterStat(LevelLabel_1, 0.355)
-    LevelLabel_1.Text = ""
-
-    RaceLabel_1.Name = "RaceLabel"
-    setupCenterStat(RaceLabel_1, 0.425)
-    RaceLabel_1.Text = "Race: N/A"
-
-    BeliLabel_1.Name = "BeliLabel"
-    setupCenterStat(BeliLabel_1, 0.495)
-    BeliLabel_1.Text = "Beli: N/A"
-
-    FragLabel_1.Name = "FragLabel"
-    setupCenterStat(FragLabel_1, 0.565)
-    FragLabel_1.Text = "Frag: N/A"
-
-    UnderRace_1.BackgroundTransparency = 1
-    UnderRace_1.Name = "UnderRace"
-    UnderRace_1.Parent = Main_1
-    UnderRace_1.AnchorPoint = Vector2.new(0.5, 0)
-    UnderRace_1.Position = UDim2.new(0.5, 0, 0.67, 0)
-    UnderRace_1.Size = UDim2.new(0.45, 0, 0, 18)
-    UnderRace_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
-    UnderRace_1.Text = "Race Progress (V3)"
-    UnderRace_1.TextColor3 = Color3.fromRGB(255, 255, 255)
-    UnderRace_1.TextSize = 16
-    UnderRace_1.TextXAlignment = Enum.TextXAlignment.Center
-
-    UIGradient_3.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80))
-    }
-    UIGradient_3.Parent = UnderRace_1
-
-    RaceContainer.Name = "RaceContainer"
-    RaceContainer.Parent = Main_1
-    RaceContainer.BackgroundTransparency = 1
-    RaceContainer.AnchorPoint = Vector2.new(0.5, 0)
-    RaceContainer.Position = UDim2.new(0.5, 0, 0.735, 0)
-    RaceContainer.Size = UDim2.new(0.88, 0, 0, 90)
-
-    local raceGrid = Instance.new("UIGridLayout")
-    raceGrid.Parent = RaceContainer
-    raceGrid.CellSize = UDim2.new(0, 150, 0, 24)
-    raceGrid.CellPadding = UDim2.new(0, 12, 0, 6)
-    raceGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    raceGrid.VerticalAlignment = Enum.VerticalAlignment.Top
-    raceGrid.SortOrder = Enum.SortOrder.LayoutOrder
-
-    DropShadow_1.AnchorPoint = Vector2.new(0.5, 0.5)
-    DropShadow_1.BackgroundTransparency = 1
-    DropShadow_1.Name = "DropShadow"
-    DropShadow_1.Parent = DropShadowHolder_1
-    DropShadow_1.Position = UDim2.new(0.5, 0, 0.5, 0)
-    DropShadow_1.Size = UDim2.new(1, 47, 1, 47)
-    DropShadow_1.ZIndex = 0
-    DropShadow_1.Image = "rbxassetid://6015897843"
-    DropShadow_1.ImageTransparency = 0.25
-    DropShadow_1.ImageColor3 = Color3.fromRGB(0, 0, 0)
-
+    -- Top Status GUI
     local Status = Instance.new("ScreenGui")
     Status.Name = "Status"
     Status.Parent = COREGUI
@@ -326,7 +294,7 @@ do
     DropShadow2Holder2_1.AnchorPoint = Vector2.new(0.5, 0.5)
     DropShadow2Holder2_1.BackgroundTransparency = 1
     DropShadow2Holder2_1.Position = UDim2.new(0.5, 0, 0.05, 0)
-    DropShadow2Holder2_1.Size = UDim2.new(0, 320, 0, 55)
+    DropShadow2Holder2_1.Size = UDim2.new(0, 360, 0, 56)
 
     local DropShadow2_1 = Instance.new("ImageLabel")
     DropShadow2_1.Name = "DropShadow2"
@@ -343,102 +311,347 @@ do
     MainStatus.Name = "Main"
     MainStatus.Parent = DropShadow2_1
     MainStatus.AnchorPoint = Vector2.new(0.5, 0.5)
-    MainStatus.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    MainStatus.BackgroundTransparency = 0.5
+    MainStatus.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    MainStatus.BackgroundTransparency = 0.25
     MainStatus.Position = UDim2.new(0.5, 0, 0.5, 0)
-    MainStatus.Size = UDim2.new(1, -50, 1, -40)
+    MainStatus.Size = UDim2.new(1, -48, 1, -38)
 
     local UIStrokeStatus = Instance.new("UIStroke")
     UIStrokeStatus.Parent = MainStatus
-    UIStrokeStatus.Color = Color3.fromRGB(233, 80, 80)
-    UIStrokeStatus.Thickness = 2.5
+    UIStrokeStatus.Color = Color3.fromRGB(255, 75, 75)
+    UIStrokeStatus.Thickness = 2.2
 
     local UICornerStatus = Instance.new("UICorner")
     UICornerStatus.Parent = MainStatus
-    UICornerStatus.CornerRadius = UDim.new(0, 6)
+    UICornerStatus.CornerRadius = UDim.new(0, 8)
 
     local StatusLabel = Instance.new("TextLabel")
     StatusLabel.Name = "StatusLabel"
     StatusLabel.Parent = MainStatus
-    StatusLabel.AnchorPoint = Vector2.new(0.5, 0)
+    StatusLabel.AnchorPoint = Vector2.new(0.5, 0.5)
     StatusLabel.BackgroundTransparency = 1
-    StatusLabel.Position = UDim2.new(0.5, 0, 0.06, 0)
-    StatusLabel.Size = UDim2.new(1, -20, 0, 34)
+    StatusLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+    StatusLabel.Size = UDim2.new(1, -20, 1, -10)
     StatusLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
-    StatusLabel.Text = "Status: nil"
-    StatusLabel.TextColor3 = Color3.fromRGB(233, 80, 80)
-    StatusLabel.TextSize = 20
+    StatusLabel.Text = "Status: Starting..."
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+    StatusLabel.TextSize = 17
     StatusLabel.TextWrapped = true
     StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 
     KaitunGuiStatusLabel = StatusLabel
 
-    local allV3 = {
-        "Human V3",
-        "Rabbit V3",
-        "Shark V3",
-        "Angel V3",
-        "Ghoul V3",
-        "Cyborg V3"
+    -- Main Card GUI
+    local CoinCard_1 = Instance.new("ScreenGui")
+    CoinCard_1.Name = "KaitunRacesBF"
+    CoinCard_1.Parent = COREGUI
+    CoinCard_1.ResetOnSpawn = false
+    CoinCard_1.DisplayOrder = 20
+
+    local DropShadowHolder_1 = Instance.new("Frame")
+    DropShadowHolder_1.AnchorPoint = Vector2.new(0.5, 0.5)
+    DropShadowHolder_1.BackgroundTransparency = 1
+    DropShadowHolder_1.Name = "DropShadowHolder"
+    DropShadowHolder_1.Parent = CoinCard_1
+    DropShadowHolder_1.Position = UDim2.new(0.5, 0, 0.53, 0)
+    DropShadowHolder_1.Size = UDim2.new(0, 600, 0, 420)
+    DropShadowHolder_1.ZIndex = 1
+
+    local Main_1 = Instance.new("Frame")
+    Main_1.AnchorPoint = Vector2.new(0.5, 0.5)
+    Main_1.BackgroundColor3 = Color3.fromRGB(16, 17, 24)
+    Main_1.BackgroundTransparency = 0.15
+    Main_1.Name = "Main"
+    Main_1.Parent = DropShadowHolder_1
+    Main_1.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Main_1.Size = UDim2.new(1, -40, 1, -40)
+
+    local UICorner_1 = Instance.new("UICorner")
+    UICorner_1.CornerRadius = UDim.new(0, 12)
+    UICorner_1.Parent = Main_1
+
+    local UIStroke_1 = Instance.new("UIStroke")
+    UIStroke_1.Color = Color3.fromRGB(255, 75, 75)
+    UIStroke_1.Thickness = 2.5
+    UIStroke_1.Parent = Main_1
+
+    -- Header Container (Title + Premium Badge)
+    local HeaderFrame = Instance.new("Frame")
+    HeaderFrame.Name = "HeaderFrame"
+    HeaderFrame.Parent = Main_1
+    HeaderFrame.BackgroundTransparency = 1
+    HeaderFrame.Position = UDim2.new(0, 0, 0, 12)
+    HeaderFrame.Size = UDim2.new(1, 0, 0, 32)
+
+    local Top_1 = Instance.new("TextLabel")
+    Top_1.BackgroundTransparency = 1
+    Top_1.Name = "Top"
+    Top_1.Parent = HeaderFrame
+    Top_1.Size = UDim2.new(1, 0, 1, 0)
+    Top_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy)
+    Top_1.Text = 'VuNguyen KaitunV3  <font color="#FFD700">[ PREMIUM ]</font>'
+    Top_1.TextColor3 = Color3.fromRGB(255, 80, 80)
+    Top_1.TextSize = 22
+    Top_1.RichText = true
+    Top_1.TextXAlignment = Enum.TextXAlignment.Center
+
+    local Divider_1 = Instance.new("Frame")
+    Divider_1.BorderSizePixel = 0
+    Divider_1.BackgroundColor3 = Color3.fromRGB(255, 75, 75)
+    Divider_1.BackgroundTransparency = 0.5
+    Divider_1.Name = "Divider"
+    Divider_1.Parent = Main_1
+    Divider_1.Position = UDim2.new(0.06, 0, 0, 50)
+    Divider_1.Size = UDim2.new(0.88, 0, 0, 1.5)
+
+    -- Account Stats Block
+    local StatsCard = Instance.new("Frame")
+    StatsCard.Name = "StatsCard"
+    StatsCard.Parent = Main_1
+    StatsCard.BackgroundColor3 = Color3.fromRGB(22, 24, 34)
+    StatsCard.BackgroundTransparency = 0.35
+    StatsCard.Position = UDim2.new(0.06, 0, 0, 60)
+    StatsCard.Size = UDim2.new(0.88, 0, 0, 110)
+
+    local StatsCardCorner = Instance.new("UICorner")
+    StatsCardCorner.CornerRadius = UDim.new(0, 8)
+    StatsCardCorner.Parent = StatsCard
+
+    local StatsCardStroke = Instance.new("UIStroke")
+    StatsCardStroke.Color = Color3.fromRGB(60, 65, 85)
+    StatsCardStroke.Thickness = 1
+    StatsCardStroke.Parent = StatsCard
+
+    local UnderStats_1 = Instance.new("TextLabel")
+    UnderStats_1.BackgroundTransparency = 1
+    UnderStats_1.Name = "UnderStats"
+    UnderStats_1.Parent = StatsCard
+    UnderStats_1.Position = UDim2.new(0, 16, 0, 8)
+    UnderStats_1.Size = UDim2.new(1, -32, 0, 18)
+    UnderStats_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+    UnderStats_1.Text = "ACCOUNT OVERVIEW"
+    UnderStats_1.TextColor3 = Color3.fromRGB(255, 110, 110)
+    UnderStats_1.TextSize = 13
+    UnderStats_1.TextXAlignment = Enum.TextXAlignment.Left
+
+    local CharacterLabel = Instance.new("TextLabel")
+    CharacterLabel.Name = "CharacterLabel"
+    CharacterLabel.BackgroundTransparency = 1
+    CharacterLabel.Parent = StatsCard
+    CharacterLabel.Position = UDim2.new(0, 16, 0, 32)
+    CharacterLabel.Size = UDim2.new(0.48, 0, 0, 20)
+    CharacterLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    CharacterLabel.Text = "Character: N/A"
+    CharacterLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
+    CharacterLabel.TextSize = 14
+    CharacterLabel.TextXAlignment = Enum.TextXAlignment.Left
+    CharacterLabel.RichText = true
+
+    local RaceLabel_1 = Instance.new("TextLabel")
+    RaceLabel_1.Name = "RaceLabel"
+    RaceLabel_1.BackgroundTransparency = 1
+    RaceLabel_1.Parent = StatsCard
+    RaceLabel_1.Position = UDim2.new(0.52, 0, 0, 32)
+    RaceLabel_1.Size = UDim2.new(0.46, 0, 0, 20)
+    RaceLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    RaceLabel_1.Text = "Current Race: N/A"
+    RaceLabel_1.TextColor3 = Color3.fromRGB(230, 230, 235)
+    RaceLabel_1.TextSize = 14
+    RaceLabel_1.TextXAlignment = Enum.TextXAlignment.Left
+    RaceLabel_1.RichText = true
+
+    local BeliLabel_1 = Instance.new("TextLabel")
+    BeliLabel_1.Name = "BeliLabel"
+    BeliLabel_1.BackgroundTransparency = 1
+    BeliLabel_1.Parent = StatsCard
+    BeliLabel_1.Position = UDim2.new(0, 16, 0, 58)
+    BeliLabel_1.Size = UDim2.new(0.48, 0, 0, 20)
+    BeliLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    BeliLabel_1.Text = "Beli: 0"
+    BeliLabel_1.TextColor3 = Color3.fromRGB(100, 255, 140)
+    BeliLabel_1.TextSize = 14
+    BeliLabel_1.TextXAlignment = Enum.TextXAlignment.Left
+
+    local FragLabel_1 = Instance.new("TextLabel")
+    FragLabel_1.Name = "FragLabel"
+    FragLabel_1.BackgroundTransparency = 1
+    FragLabel_1.Parent = StatsCard
+    FragLabel_1.Position = UDim2.new(0.52, 0, 0, 58)
+    FragLabel_1.Size = UDim2.new(0.46, 0, 0, 20)
+    FragLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    FragLabel_1.Text = "Fragments: 0"
+    FragLabel_1.TextColor3 = Color3.fromRGB(175, 150, 255)
+    FragLabel_1.TextSize = 14
+    FragLabel_1.TextXAlignment = Enum.TextXAlignment.Left
+
+    local GoalLabel = Instance.new("TextLabel")
+    GoalLabel.Name = "GoalLabel"
+    GoalLabel.BackgroundTransparency = 1
+    GoalLabel.Parent = StatsCard
+    GoalLabel.Position = UDim2.new(0, 16, 0, 84)
+    GoalLabel.Size = UDim2.new(1, -32, 0, 18)
+    GoalLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    GoalLabel.Text = "Server: -- | Job: --"
+    GoalLabel.TextColor3 = Color3.fromRGB(150, 155, 175)
+    GoalLabel.TextSize = 12
+    GoalLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Race Progress Header
+    local UnderRace_1 = Instance.new("TextLabel")
+    UnderRace_1.BackgroundTransparency = 1
+    UnderRace_1.Name = "UnderRace"
+    UnderRace_1.Parent = Main_1
+    UnderRace_1.Position = UDim2.new(0.06, 0, 0, 180)
+    UnderRace_1.Size = UDim2.new(0.88, 0, 0, 22)
+    UnderRace_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+    UnderRace_1.Text = "RACE V3 PROGRESSION (CONFIG SYNCED)"
+    UnderRace_1.TextColor3 = Color3.fromRGB(255, 110, 110)
+    UnderRace_1.TextSize = 13
+    UnderRace_1.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Race Mini-Cards Grid Container
+    local RaceContainer = Instance.new("Frame")
+    RaceContainer.Name = "RaceContainer"
+    RaceContainer.Parent = Main_1
+    RaceContainer.BackgroundTransparency = 1
+    RaceContainer.Position = UDim2.new(0.06, 0, 0, 208)
+    RaceContainer.Size = UDim2.new(0.88, 0, 0, 150)
+
+    local raceGrid = Instance.new("UIGridLayout")
+    raceGrid.Parent = RaceContainer
+    raceGrid.CellSize = UDim2.new(0.485, 0, 0, 42)
+    raceGrid.CellPadding = UDim2.new(0.03, 0, 0, 8)
+    raceGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    raceGrid.VerticalAlignment = Enum.VerticalAlignment.Top
+    raceGrid.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local raceDataList = {
+        { config = "Human", v3 = "Human V3", color = Color3.fromRGB(255, 75, 75) },
+        { config = "Mink", v3 = "Rabbit V3", color = Color3.fromRGB(60, 255, 120) },
+        { config = "Fishman", v3 = "Shark V3", color = Color3.fromRGB(0, 185, 255) },
+        { config = "Skypiea", v3 = "Angel V3", color = Color3.fromRGB(255, 215, 0) },
+        { config = "Cyborg", v3 = "Cyborg V3", color = Color3.fromRGB(210, 80, 255) },
+        { config = "Ghoul", v3 = "Ghoul V3", color = Color3.fromRGB(160, 255, 80) },
     }
 
-    local raceColors = {
-        ["Angel V3"] = Color3.fromRGB(255, 204, 0),
-        ["Human V3"] = Color3.fromRGB(255, 50, 50),
-        ["Shark V3"] = Color3.fromRGB(0, 168, 255),
-        ["Cyborg V3"] = Color3.fromRGB(204, 0, 255),
-        ["Ghoul V3"] = Color3.fromRGB(160, 255, 80),
-        ["Rabbit V3"] = Color3.fromRGB(0, 255, 60),
-    }
+    local raceCardElements = {}
 
-    local raceLabels = {}
+    local function createRaceCard(info, order)
+        local card = Instance.new("Frame")
+        card.Name = info.config
+        card.Parent = RaceContainer
+        card.BackgroundColor3 = Color3.fromRGB(22, 24, 34)
+        card.BackgroundTransparency = 0.3
+        card.LayoutOrder = order
 
-    local function createRaceLabel(raceName, order)
-        local lbl = Instance.new("TextLabel")
-        lbl.Name = raceName:gsub("%s+", "")
-        lbl.Parent = RaceContainer
-        lbl.BackgroundTransparency = 1
-        lbl.Size = UDim2.new(0, 150, 0, 24)
-        lbl.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
-        lbl.TextSize = 16
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.TextYAlignment = Enum.TextYAlignment.Center
-        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-        lbl.LayoutOrder = order
-        lbl.RichText = true
-        return lbl
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 7)
+        corner.Parent = card
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.2
+        stroke.Color = Color3.fromRGB(50, 55, 72)
+        stroke.Parent = card
+
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Name = "Title"
+        titleLabel.Parent = card
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Position = UDim2.new(0, 10, 0, 4)
+        titleLabel.Size = UDim2.new(0.6, 0, 0, 18)
+        titleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+        titleLabel.Text = info.v3
+        titleLabel.TextColor3 = info.color
+        titleLabel.TextSize = 14
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local stateLabel = Instance.new("TextLabel")
+        stateLabel.Name = "State"
+        stateLabel.Parent = card
+        stateLabel.BackgroundTransparency = 1
+        stateLabel.Position = UDim2.new(0, 10, 0, 22)
+        stateLabel.Size = UDim2.new(0.6, 0, 0, 16)
+        stateLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+        stateLabel.Text = "🔴 MISSING"
+        stateLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        stateLabel.TextSize = 12
+        stateLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local cfgBadge = Instance.new("TextLabel")
+        cfgBadge.Name = "CfgBadge"
+        cfgBadge.Parent = card
+        cfgBadge.AnchorPoint = Vector2.new(1, 0.5)
+        cfgBadge.Position = UDim2.new(1, -10, 0.5, 0)
+        cfgBadge.Size = UDim2.new(0, 52, 0, 22)
+        cfgBadge.BackgroundColor3 = Color3.fromRGB(30, 33, 46)
+        cfgBadge.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+        cfgBadge.Text = "OFF"
+        cfgBadge.TextColor3 = Color3.fromRGB(150, 150, 160)
+        cfgBadge.TextSize = 11
+
+        local badgeCorner = Instance.new("UICorner")
+        badgeCorner.CornerRadius = UDim.new(0, 5)
+        badgeCorner.Parent = cfgBadge
+
+        return {
+            Card = card,
+            Stroke = stroke,
+            Title = titleLabel,
+            State = stateLabel,
+            Badge = cfgBadge,
+            Info = info
+        }
     end
 
-    for i, race in ipairs(allV3) do
-        raceLabels[race] = createRaceLabel(race, i)
+    for i, info in ipairs(raceDataList) do
+        raceCardElements[info.config] = createRaceCard(info, i)
     end
 
+    -- Real-time UI refresh loop
     task.spawn(function()
         while task.wait(0.4) do
             pcall(function()
                 if plr:FindFirstChild("Data") then
                     if plr.Data:FindFirstChild("Beli") then
-                        BeliLabel_1.Text = "Beli: " .. tostring(plr.Data.Beli.Value)
+                        BeliLabel_1.Text = "Beli: " .. formatNumber(plr.Data.Beli.Value)
                     end
                     if plr.Data:FindFirstChild("Fragments") then
-                        FragLabel_1.Text = "Frag: " .. tostring(plr.Data.Fragments.Value)
+                        FragLabel_1.Text = "Fragments: " .. formatNumber(plr.Data.Fragments.Value)
                     end
                     if plr.Data:FindFirstChild("Race") then
-                        RaceLabel_1.Text = "Race: " .. tostring(plr.Data.Race.Value)
+                        RaceLabel_1.Text = 'Current Race: <font color="#FFD700">' .. tostring(plr.Data.Race.Value) .. '</font>'
                     end
                 end
 
-                CharacterLabel.Text = '<font color="#FFFFFF">Character: ' .. tostring(plr.Name) .. '</font>'
-                LevelLabel_1.Text = ""
+                CharacterLabel.Text = 'Character: <font color="#FFFFFF">' .. tostring(plr.Name) .. '</font>'
+                GoalLabel.Text = string.format("Players: %d/%d | Job: %s", #Players:GetPlayers(), Players.MaxPlayers, string.sub(game.JobId, 1, 12))
 
                 local unlockedMap = ScanV3Titles(false)
+                local cfgRaces = getgenv().Races or (getgenv().Settings and getgenv().Settings["Races"]) or {}
 
-                for _, race in ipairs(allV3) do
-                    local has = unlockedMap[race] == true
-                    local dot = has and "🟢" or "🔴"
-                    local color = raceColors[race] or Color3.fromRGB(255, 255, 255)
-                    local hex = string.format("#%02X%02X%02X", color.R * 255, color.G * 255, color.B * 255)
-                    raceLabels[race].Text = dot .. ' <font color="' .. hex .. '">' .. race .. '</font>'
+                for _, item in pairs(raceCardElements) do
+                    local isDone = unlockedMap[item.Info.config] == true or unlockedMap[item.Info.v3] == true
+                    local isEnabled = cfgRaces[item.Info.config] == true
+
+                    if isDone then
+                        item.State.Text = "🟢 DONE"
+                        item.State.TextColor3 = Color3.fromRGB(80, 255, 140)
+                        item.Stroke.Color = Color3.fromRGB(40, 160, 80)
+                    else
+                        item.State.Text = "🔴 MISSING"
+                        item.State.TextColor3 = Color3.fromRGB(255, 100, 100)
+                        item.Stroke.Color = isEnabled and Color3.fromRGB(180, 60, 60) or Color3.fromRGB(50, 55, 72)
+                    end
+
+                    if isEnabled then
+                        item.Badge.Text = "ON"
+                        item.Badge.TextColor3 = Color3.fromRGB(80, 255, 140)
+                        item.Badge.BackgroundColor3 = Color3.fromRGB(20, 45, 30)
+                    else
+                        item.Badge.Text = "OFF"
+                        item.Badge.TextColor3 = Color3.fromRGB(150, 150, 160)
+                        item.Badge.BackgroundColor3 = Color3.fromRGB(28, 30, 40)
+                    end
                 end
             end)
         end
@@ -454,9 +667,75 @@ function SetStatus(text)
 end
 
 local function SetText(newText)
-    local text = tostring(newText)
-    SetStatus(text)
+    SetStatus(newText)
 end
+
+pcall(function() LocalPlayer.PlayerGui:FindFirstChild("Blank"):Destroy() end)
+local BlankScreen = LocalPlayer.PlayerGui:FindFirstChild("Blank") or Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+BlankScreen.Name = "Blank" BlankScreen.ResetOnSpawn = false BlankScreen.DisplayOrder = -math.huge BlankScreen.IgnoreGuiInset = true
+
+local Black = BlankScreen:FindFirstChild("Black Screen") or Instance.new("Frame", BlankScreen)
+Black.Name = "Black Screen"
+Black.Size = UDim2.new(1, 0, 1, 0)
+Black.BackgroundColor3 = Color3.new(0, 0, 0)
+Black.ZIndex = -math.huge
+Black.Visible = getgenv().Settings["Black Screen"]
+
+RunService:Set3dRenderingEnabled(not Black.Visible)
+
+local leftButton = Instance.new("TextButton", BlankScreen)
+leftButton.Name = "LeftButton"
+leftButton.AnchorPoint = Vector2.new(0, 0)
+leftButton.Position = UDim2.new(0, 20, 0, 90)
+leftButton.Size = UDim2.new(0, 90, 0, 38)
+leftButton.Text = "ON"
+leftButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+leftButton.TextColor3 = Color3.fromRGB(255, 80, 80)
+leftButton.TextSize = 22
+leftButton.Font = Enum.Font.GothamBlack
+leftButton.TextStrokeTransparency = 0.1
+leftButton.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+leftButton.AutoButtonColor = true
+leftButton.Active = true
+leftButton.Draggable = true
+
+local leftButtonCorner = Instance.new("UICorner")
+leftButtonCorner.CornerRadius = UDim.new(0, 8)
+leftButtonCorner.Parent = leftButton
+
+local leftButtonStroke = Instance.new("UIStroke")
+leftButtonStroke.Color = Color3.fromRGB(255, 80, 80)
+leftButtonStroke.Thickness = 2
+leftButtonStroke.Parent = leftButton
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.F4 then
+        Black.Visible = not Black.Visible
+        RunService:Set3dRenderingEnabled(not Black.Visible)
+        StarterGui:SetCore("SendNotification", {
+            Title = "Black Screen",
+            Text = Black.Visible and "Đã BẬT màn hình đen (Tắt Render 3D)" or "Đã TẮT màn hình đen (Bật Render 3D)",
+            Duration = 2
+        })
+    end
+end)
+
+leftButton.MouseButton1Click:Connect(function()
+    guiVisible = not guiVisible
+    leftButton.Text = guiVisible and "ON" or "OFF"
+    leftButton.TextColor3 = guiVisible and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 80)
+    leftButtonStroke.Color = guiVisible and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 80, 80)
+
+    local kaitunGui = COREGUI:FindFirstChild("KaitunRacesBF")
+    if kaitunGui then kaitunGui.Enabled = guiVisible end
+
+    local statusGui = COREGUI:FindFirstChild("Status")
+    if statusGui then statusGui.Enabled = guiVisible end
+
+    if KaitunGuiBlur then
+        KaitunGuiBlur.Size = guiVisible and 24 or 0
+    end
+end)
 
 function CheckSea(v: number) return v == tonumber(workspace:GetAttribute("MAP"):match("%d+")) end
 local remoteAttack, idremote
@@ -1058,134 +1337,6 @@ FarmBeli = (function(stopConditionFunc, ignoreY, ignoreFistStop)
 end)
 
 -- ============================================================
--- [ EXACT TITLE NAME V3 CHECKER ]
--- ============================================================
-local TITLE_FAST_SCAN_INTERVAL = 5
-local TITLE_FAST_SCAN_LIMIT = 3
-local TITLE_SCAN_INTERVAL = 30
-
-local TITLE_TARGETS = {
-    { title = "Full Power", configRace = "Human", raceV3 = "Human V3" },
-    { title = "Godspeed", configRace = "Mink", raceV3 = "Rabbit V3" },
-    { title = "Warrior of the Sea", configRace = "Fishman", raceV3 = "Shark V3" },
-    { title = "Perfect Being", configRace = "Skypiea", raceV3 = "Angel V3" },
-    { title = "War Machine", configRace = "Cyborg", raceV3 = "Cyborg V3" },
-    { title = "Hell Hound", configRace = "Ghoul", raceV3 = "Ghoul V3" },
-}
-
-local TITLE_FIELDS = {
-    title = true,
-    name = true,
-    titlename = true,
-    displayname = true,
-}
-
-local titleCache = {
-    initialized = false,
-    scanning = false,
-    lastScan = 0,
-    scanCount = 0,
-    currentInterval = TITLE_FAST_SCAN_INTERVAL,
-    map = {},
-}
-
-local function GetTitleScanInterval()
-    if titleCache.scanCount < TITLE_FAST_SCAN_LIMIT then
-        return TITLE_FAST_SCAN_INTERVAL
-    end
-    return TITLE_SCAN_INTERVAL
-end
-
-local function NormalizeText(value)
-    return tostring(value or ""):lower():gsub("[^%w]", "")
-end
-
-local function ExactTitleMatch(targetTitle, value)
-    return NormalizeText(targetTitle) == NormalizeText(value)
-end
-
-local function WalkTables(value, path, depth, visited, callback)
-    if type(value) ~= "table" or depth > 10 then return end
-    if visited[value] then return end
-    visited[value] = true
-    callback(value, path)
-
-    for key, child in pairs(value) do
-        if type(child) == "table" then
-            WalkTables(child, path .. "[" .. tostring(key) .. "]", depth + 1, visited, callback)
-        end
-    end
-end
-
-local function NodeHasExactTitle(node, targetTitle)
-    for key, value in pairs(node) do
-        local normalizedKey = NormalizeText(key)
-        if type(value) ~= "table" and TITLE_FIELDS[normalizedKey] and ExactTitleMatch(targetTitle, value) then
-            return true
-        end
-        if type(key) == "string" and ExactTitleMatch(targetTitle, key) then
-            return true
-        end
-    end
-    return false
-end
-
-local function InvokeGetTitles(timeoutSeconds)
-    local completed = false
-    local okResult = false
-    local dataResult = nil
-
-    task.spawn(function()
-        local ok, data = pcall(function()
-            return COMMF_:InvokeServer("getTitles")
-        end)
-        okResult = ok
-        dataResult = ok and data or nil
-        completed = true
-    end)
-
-    local deadline = tick() + (tonumber(timeoutSeconds) or 2)
-    repeat task.wait(0.05) until completed or tick() >= deadline
-
-    return okResult, dataResult
-end
-
-local function ScanV3Titles(force)
-    if titleCache.scanning then return titleCache.map end
-
-    local requiredInterval = GetTitleScanInterval()
-    if not force and titleCache.initialized and tick() - titleCache.lastScan < requiredInterval then
-        return titleCache.map
-    end
-
-    titleCache.scanning = true
-    local foundMap = {}
-    local remoteOk, remoteData = InvokeGetTitles(2)
-
-    for _, target in ipairs(TITLE_TARGETS) do
-        local found = false
-        if remoteOk and type(remoteData) == "table" then
-            WalkTables(remoteData, "getTitles", 0, {}, function(node)
-                if NodeHasExactTitle(node, target.title) then
-                    found = true
-                end
-            end)
-        end
-        foundMap[target.configRace] = found
-        foundMap[target.raceV3] = found
-    end
-
-    titleCache.map = foundMap
-    titleCache.lastScan = tick()
-    titleCache.scanCount = titleCache.scanCount + 1
-    titleCache.currentInterval = GetTitleScanInterval()
-    titleCache.initialized = true
-    titleCache.scanning = false
-
-    return titleCache.map
-end
-
--- ============================================================
 -- [ SERVER BROWSER V5.5 - 20 PAGES BATCH + 4/5/6 PLAYERS ]
 -- ============================================================
 local BROWSER_BATCH_PAGES = 20
@@ -1718,7 +1869,6 @@ task.spawn(function()
                                     local killedCount = 0
                                     for _ in pairs(HumanBossKills) do killedCount += 1 end
 
-                                    -- Nếu server có >= 2 boss hoặc đã hạ >= 2 boss: Khóa server, kiên nhẫn diệt và chờ con thứ 3
                                     if aliveBosses >= 2 or killedCount >= 2 then
                                         HumanServerLocked = true
                                     end
@@ -1751,7 +1901,6 @@ task.spawn(function()
                                             task.wait(2)
                                         end
                                     else
-                                        -- Server < 2 boss và chưa giết được 2 boss -> Tự động hop Server Browser
                                         SetText(string.format("Human V3: Only %d boss alive -> Hopping Server (4-6p)...", aliveBosses))
                                         task.wait(1.5)
                                         HopServerBrowser()
