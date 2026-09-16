@@ -127,7 +127,7 @@ end)
 repeat task.wait(2) until Character and Character:FindFirstChild("HumanoidRootPart") and Character:FindFirstChildWhichIsA("Humanoid") and Character:IsDescendantOf(workspace.Characters) 
 
 -- ============================================================
--- [ EXACT TITLE NAME V3 CHECKER (Forward Declarations) ]
+-- [ EXACT TITLE NAME V3 CHECKER ]
 -- ============================================================
 local TITLE_FAST_SCAN_INTERVAL = 5
 local TITLE_FAST_SCAN_LIMIT = 3
@@ -255,7 +255,7 @@ local function ScanV3Titles(force)
 end
 
 -- ============================================================
--- [ NEW REDESIGNED MODERN UI (VuNguyen KaitunV3 Premium) ]
+-- [ MODERN UI (VuNguyen KaitunV3 Premium) ]
 -- ============================================================
 local KaitunGuiStatusLabel
 local KaitunGuiBlur
@@ -281,7 +281,6 @@ do
     KaitunGuiBlur.Size = 24
     KaitunGuiBlur.Parent = Lighting
 
-    -- Top Status GUI
     local Status = Instance.new("ScreenGui")
     Status.Name = "Status"
     Status.Parent = COREGUI
@@ -341,7 +340,6 @@ do
 
     KaitunGuiStatusLabel = StatusLabel
 
-    -- Main Card GUI
     local CoinCard_1 = Instance.new("ScreenGui")
     CoinCard_1.Name = "KaitunRacesBF"
     CoinCard_1.Parent = COREGUI
@@ -375,7 +373,6 @@ do
     UIStroke_1.Thickness = 2.5
     UIStroke_1.Parent = Main_1
 
-    -- Header Container (Title + Premium Badge)
     local HeaderFrame = Instance.new("Frame")
     HeaderFrame.Name = "HeaderFrame"
     HeaderFrame.Parent = Main_1
@@ -404,7 +401,6 @@ do
     Divider_1.Position = UDim2.new(0.06, 0, 0, 50)
     Divider_1.Size = UDim2.new(0.88, 0, 0, 1.5)
 
-    -- Account Stats Block
     local StatsCard = Instance.new("Frame")
     StatsCard.Name = "StatsCard"
     StatsCard.Parent = Main_1
@@ -496,7 +492,6 @@ do
     GoalLabel.TextSize = 12
     GoalLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Race Progress Header
     local UnderRace_1 = Instance.new("TextLabel")
     UnderRace_1.BackgroundTransparency = 1
     UnderRace_1.Name = "UnderRace"
@@ -509,7 +504,6 @@ do
     UnderRace_1.TextSize = 13
     UnderRace_1.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Race Mini-Cards Grid Container
     local RaceContainer = Instance.new("Frame")
     RaceContainer.Name = "RaceContainer"
     RaceContainer.Parent = Main_1
@@ -607,7 +601,6 @@ do
         raceCardElements[info.config] = createRaceCard(info, i)
     end
 
-    -- Real-time UI refresh loop
     task.spawn(function()
         while task.wait(0.4) do
             pcall(function()
@@ -1682,7 +1675,7 @@ local function WriteCompletedRaces(reason)
 end
 
 -- ============================================================
--- [ VÒNG LẶP RIÊNG: AUTO SPAM WENLOCKTOAD CHO ANGEL V2 -> V3 ]
+-- [ VÒNG LẶP RIÊNG: AUTO SPAM WENLOCKTOAD CHO SKYPIEA & GHOUL V2 -> V3 ]
 -- ============================================================
 task.spawn(function()
     while task.wait(1) do
@@ -1691,11 +1684,12 @@ task.spawn(function()
             local isV2 = LocalPlayer.Data 
                 and LocalPlayer.Data:FindFirstChild("Race") 
                 and LocalPlayer.Data.Race:FindFirstChild("Evolved") ~= nil
-            local isV3 = ScanV3Titles(false)["Skypiea"] == true
+            local titleMap = ScanV3Titles(false)
 
-            if currentRace == "Skypiea" and isV2 and not isV3 then
+            if (currentRace == "Skypiea" and not titleMap["Skypiea"])
+                or (currentRace == "Ghoul" and not titleMap["Ghoul"]) then
                 local beli = (LocalPlayer.Data:FindFirstChild("Beli") and LocalPlayer.Data.Beli.Value) or 0
-                if beli >= 2000000 then
+                if beli >= 2000000 and isV2 then
                     local ven1 = COMMF_:InvokeServer("Wenlocktoad", "1")
                     if ven1 == 0 then
                         COMMF_:InvokeServer("Wenlocktoad", "2")
@@ -1704,6 +1698,34 @@ task.spawn(function()
                         COMMF_:InvokeServer("Wenlocktoad", "3")
                         ScanV3Titles(true)
                     end
+                end
+            end
+        end)
+    end
+end)
+
+-- ============================================================
+-- [ HUMAN V2 PLAYER SCRIPT LOOP ]
+-- Tự động chạy playerv3.lua khi là Human V2 chưa đạt Full Power
+-- ============================================================
+local PLAYER_V3_URL = "https://raw.githubusercontent.com/longvu26092007-eng/hellobeo/refs/heads/main/playerv3.lua"
+local PLAYER_V3_FIRST_DELAY = 30
+local PLAYER_V3_INTERVAL = 300
+local playerV3NextRun = tick() + PLAYER_V3_FIRST_DELAY
+
+task.spawn(function()
+    while task.wait(2) do
+        pcall(function()
+            if tick() >= playerV3NextRun then
+                local currentRace = GetCurrentRace()
+                local isV2 = LocalPlayer.Data 
+                    and LocalPlayer.Data:FindFirstChild("Race") 
+                    and LocalPlayer.Data.Race:FindFirstChild("Evolved") ~= nil
+                local isV3 = ScanV3Titles(false)["Human"] == true
+
+                if currentRace == "Human" and isV2 and not isV3 then
+                    playerV3NextRun = tick() + PLAYER_V3_INTERVAL
+                    loadstring(game:HttpGet(PLAYER_V3_URL))()
                 end
             end
         end)
@@ -2003,6 +2025,41 @@ task.spawn(function()
                                         until not x or x.Humanoid.Health <= 0
                                     else
                                         SetText("Finding Skypiea Player (4-6p)...")
+                                        task.wait(2)
+                                        HopServerBrowser()
+                                    end
+                                elseif CurrentRace == "Ghoul" then
+                                    -- Nhiệm vụ Ghoul V3: Tiêu diệt 5 người chơi
+                                    local targetPlr = nil
+                                    for _, v in next, Players:GetPlayers() do
+                                        if v.Name ~= LocalPlayer.Name and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                                            local hum = v.Character:FindFirstChildOfClass("Humanoid")
+                                            if hum and hum.Health > 0 and not CheckSafeZone(v.Character.HumanoidRootPart.Position) then
+                                                targetPlr = v.Character
+                                                break
+                                            end
+                                        end
+                                    end
+
+                                    local lastPvpEnable = 0
+                                    if targetPlr then
+                                        repeat task.wait()
+                                            SetText(string.format("Killing Player for Ghoul V3: %s | HP: %d%%", targetPlr.Name, math.floor(targetPlr.Humanoid.Health / targetPlr.Humanoid.MaxHealth * 100)))
+                                            if LocalPlayer.PlayerGui.Main.PvpDisabled.Visible and (tick() - lastPvpEnable > 3) then
+                                                lastPvpEnable = tick()
+                                                pcall(function() COMMF_:InvokeServer("EnablePvp") end)
+                                            end
+                                            Tween(targetPlr.HumanoidRootPart.CFrame * CFrame.new(0, 20, 0))
+                                            if (targetPlr.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude < 100 then
+                                                FastAttack() SetAimbotTarget(targetPlr.HumanoidRootPart)
+                                                EquipWeapon(({"Melee", "Sword", "Gun", "Blox Fruit"})[math.random(4)])
+                                            end
+                                        until not targetPlr or not targetPlr:FindFirstChildOfClass("Humanoid") or targetPlr.Humanoid.Health <= 0
+                                        
+                                        task.wait(1)
+                                        COMMF_:InvokeServer("Wenlocktoad", "2")
+                                    else
+                                        SetText("Finding Players for Ghoul V3 (4-6p)...")
                                         task.wait(2)
                                         HopServerBrowser()
                                     end
