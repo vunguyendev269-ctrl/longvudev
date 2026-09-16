@@ -27,9 +27,9 @@ getgenv().Settings = getgenv().Settings or {
     ["Focus Melee"] = "Sharkman Karate",
     ["Races"] = {
         ["Human"] = true,
-        ["Mink"] = false,
-        ["Fishman"] = false,
-        ["Skypiea"] = false,
+        ["Mink"] = false,      
+        ["Fishman"] = false,   
+        ["Skypiea"] = false,   
         ["Cyborg"] = false,
         ["Ghoul"] = false,
     },
@@ -1847,6 +1847,9 @@ task.spawn(function()
     ScanV3Titles(true)
     task.wait(1)
 
+    -- Biến lưu thời điểm kiểm tra bật PvP cho Angel V3 (debounce 15 giây)
+    local lastAngelPvpEnable = 0
+
     while task.wait(0.5) do
         xpcall(function()
             local CurrentRace = GetCurrentRace()
@@ -2022,7 +2025,7 @@ task.spawn(function()
                                     FarmBeli(function() return (ScanV3Titles(false)["Mink"] == true) end, nil, true)
                                 elseif CurrentRace == "Fishman" then
                                     -- ============================================================
-                                    -- [ BẢN GỐC FISHMAN V3 (Speed: 150 studs/s) ]
+                                    -- [ BẢN FISHMAN V3 (CHỈ MELEE + SPAM CHIÊU CHO SHARK & SEA BEAST) ]
                                     -- ============================================================
                                     local function SharkV3GetPlayerBoat()
                                         for _, boat in next, workspace.Boats:GetChildren() do
@@ -2089,11 +2092,17 @@ task.spawn(function()
 
                                         if sharkMob then
                                             SetText("Shark V3 | Killing " .. tostring(sharkMob.Name))
-                                            if sharkMob:IsDescendantOf(workspace.Enemies) then
-                                                KillMonster(tostring(sharkMob.Name))
-                                            else
-                                                local hrp = sharkMob:FindFirstChild("HumanoidRootPart") or sharkMob:FindFirstChildWhichIsA("BasePart")
-                                                if hrp then Tween(hrp.CFrame) end
+                                            local targetHrp = sharkMob:FindFirstChild("HumanoidRootPart") or sharkMob:FindFirstChildWhichIsA("BasePart")
+                                            if targetHrp then
+                                                Tween(targetHrp.CFrame * CFrame.new(0, 15, 0))
+                                                EquipWeapon("Melee")
+                                                FastAttack()
+                                                SetAimbotTarget(targetHrp)
+                                                for _, key in ipairs({"Z", "X", "C", "V"}) do
+                                                    if CheckCooldownSkill(key) then
+                                                        SharkV3SendKey(key, 0.05)
+                                                    end
+                                                end
                                             end
                                             return
                                         end
@@ -2137,9 +2146,11 @@ task.spawn(function()
                                                 local lockCFrame = pivot * CFrame.new(0, 300, 0)
                                                 Tween(lockCFrame)
                                                 SetAimbotTarget(lockCFrame)
-                                                for _, key in ipairs({"Z", "X", "C"}) do
-                                                    EquipWeapon((math.random(1, 2) == 1) and "Melee" or "Sword")
-                                                    SharkV3SendKey(key, 0.05)
+                                                EquipWeapon("Melee")
+                                                for _, key in ipairs({"Z", "X", "C", "V"}) do
+                                                    if CheckCooldownSkill(key) then
+                                                        SharkV3SendKey(key, 0.05)
+                                                    end
                                                 end
                                                 FastAttack()
                                             else
@@ -2162,14 +2173,34 @@ task.spawn(function()
                                         end
                                     end
                                     
-                                    local lastPvpEnable = 0
+                                    -- Kiểm tra và tự động bật PvP mỗi 15 giây chuẩn debounce
+                                    if tick() - lastAngelPvpEnable >= 15 then
+                                        lastAngelPvpEnable = tick()
+                                        pcall(function()
+                                            local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                                            local pvpBtn = playerGui and playerGui:FindFirstChild("Main") and playerGui.Main:FindFirstChild("PvpDisabled")
+                                            if pvpBtn and pvpBtn.Visible then
+                                                COMMF_:InvokeServer("EnablePvp")
+                                            end
+                                        end)
+                                    end
+
                                     if x then
                                         repeat task.wait()
                                             SetText("Killing Skypiea Player | Health: ".. math.floor(x.Humanoid.Health / x.Humanoid.MaxHealth * 100).. "%")
-                                            if LocalPlayer.PlayerGui.Main.PvpDisabled.Visible and (tick() - lastPvpEnable > 3) then
-                                                lastPvpEnable = tick()
-                                                pcall(function() COMMF_:InvokeServer("EnablePvp") end)
+                                            
+                                            -- Kiểm tra lại PvP nếu vẫn bị tắt sau 15 giây trong lúc đánh
+                                            if tick() - lastAngelPvpEnable >= 15 then
+                                                lastAngelPvpEnable = tick()
+                                                pcall(function()
+                                                    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                                                    local pvpBtn = playerGui and playerGui:FindFirstChild("Main") and playerGui.Main:FindFirstChild("PvpDisabled")
+                                                    if pvpBtn and pvpBtn.Visible then
+                                                        COMMF_:InvokeServer("EnablePvp")
+                                                    end
+                                                end)
                                             end
+
                                             Tween(x.HumanoidRootPart.CFrame * CFrame.new(0, 20, 0))
                                             if (x.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude < 100 then
                                                 FastAttack() SetAimbotTarget(x.HumanoidRootPart)
