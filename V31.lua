@@ -254,6 +254,29 @@ local function ScanV3Titles(force)
     return titleCache.map
 end
 
+local raceAlias = {
+    human = "Human",
+    mink = "Mink",
+    rabbit = "Mink",
+    fishman = "Fishman",
+    shark = "Fishman",
+    skypiea = "Skypiea",
+    angel = "Skypiea",
+    ghoul = "Ghoul",
+    cyborg = "Cyborg",
+    draco = "Draco",
+}
+
+local function NormalizeRaceName(name)
+    local s = tostring(name or ""):lower():gsub("%s+", "")
+    return raceAlias[s] or tostring(name or "")
+end
+
+local function GetCurrentRace()
+    local raceVal = LocalPlayer.Data and LocalPlayer.Data:FindFirstChild("Race")
+    return NormalizeRaceName(raceVal and raceVal.Value or "")
+end
+
 -- ============================================================
 -- [ MODERN UI (VuNguyen KaitunV3 Premium) ]
 -- ============================================================
@@ -735,7 +758,7 @@ local remoteAttack, idremote
 local seed = ReplicatedStorage.Modules.Net.seed:InvokeServer()
 task.spawn((function() for _, v in next, ({ReplicatedStorage.Util, ReplicatedStorage.Common, ReplicatedStorage.Remotes, ReplicatedStorage.Assets, ReplicatedStorage.FX}) do
     for _, n in next, v:GetChildren() do if n:IsA("RemoteEvent") and n:GetAttribute("Id") then remoteAttack, idremote = n, n:GetAttribute("Id") end
-    end v.ChildAdded:Connect(function(n) if n:IsA("RemoteEvent") and n:GetAttribute("Id") then remoteAttack, idremote = n, n:GetAttribute("Id")
+    end v.ChildAdded:Connect(function(n) if n:IsA("RemoteEvent") and n:GetAttribute("Id") then remoteAttack, idremote = n, n:GetAttribute("Id") end
     end end) end
 end))
 CheckLocation = (function(v)return LocalPlayer:GetAttribute("CurrentLocation") == v end)
@@ -901,11 +924,19 @@ local function ExitTheChar()
 end
 
 -- ============================================================
--- PROXY TWEEN SYSTEM (Speed: 160 studs/s)
+-- PROXY TWEEN SYSTEM
+-- (Tốc độ mặc định 160 studs/s, riêng Fishman tự động giảm còn 150 studs/s)
 -- ============================================================
 local TWEEN_SPEED = 160
 local ACTIVE_PROXY_MOVE = nil
 local PROXY_MOVE_SERIAL = 0
+
+local function getActiveTweenSpeed()
+    if GetCurrentRace and GetCurrentRace() == "Fishman" then
+        return 150
+    end
+    return TWEEN_SPEED
+end
 
 local function stopVelocity(root)
     if not root or not root.Parent then return end
@@ -942,7 +973,7 @@ local function cancelProxyTween()
     cleanupProxyMove(move)
 end
 
-local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition)
+local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTarget)
     assert(typeof(targetCFrame) == "CFrame", "targetCFrame must be CFrame")
     arriveDistance = tonumber(arriveDistance) or 5
 
@@ -961,10 +992,16 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition)
 
     cancelProxyTween()
 
-    local distance = (root.Position - targetCFrame.Position).Magnitude
+    local startPos = (moveTarget and moveTarget:IsA("BasePart")) and moveTarget.Position or root.Position
+    local distance = (startPos - targetCFrame.Position).Magnitude
     if distance <= arriveDistance then
-        root.CFrame = targetCFrame
-        stopVelocity(root)
+        if moveTarget and moveTarget:IsA("BasePart") then
+            moveTarget.CFrame = targetCFrame
+            stopVelocity(moveTarget)
+        else
+            root.CFrame = targetCFrame
+            stopVelocity(root)
+        end
         return true, distance
     end
 
@@ -979,7 +1016,7 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition)
     proxy.CanCollide = false
     proxy.CanQuery = false
     proxy.CanTouch = false
-    proxy.CFrame = root.CFrame
+    proxy.CFrame = CFrame.new(startPos)
     proxy.Parent = workspace
 
     local oldCollide = {}
@@ -996,6 +1033,7 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition)
         humanoid = hum,
         root = root,
         proxy = proxy,
+        moveTarget = moveTarget,
         oldCollide = oldCollide,
         cleaned = false,
     }
@@ -1022,21 +1060,26 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition)
             return
         end
 
-        if not NeedSit then
-            currentHum.Sit = false
-        end
-
         for _, obj in ipairs(current:GetDescendants()) do
             if obj:IsA("BasePart") then
                 obj.CanCollide = false
             end
         end
 
-        currentRoot.CFrame = proxy.CFrame
-        stopVelocity(currentRoot)
+        if move.moveTarget and move.moveTarget.Parent then
+            move.moveTarget.CFrame = proxy.CFrame
+            stopVelocity(move.moveTarget)
+        else
+            if not NeedSit then
+                currentHum.Sit = false
+            end
+            currentRoot.CFrame = proxy.CFrame
+            stopVelocity(currentRoot)
+        end
     end)
 
-    local duration = math.max(distance / TWEEN_SPEED, 0.05)
+    local currentSpeed = getActiveTweenSpeed()
+    local duration = math.max(distance / currentSpeed, 0.05)
     move.tween = TweenService:Create(
         proxy,
         TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
@@ -1064,8 +1107,13 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition)
         if remaining <= arriveDistance then
             pcall(function() move.tween:Cancel() end)
             proxy.CFrame = targetCFrame
-            root.CFrame = targetCFrame
-            stopVelocity(root)
+            if move.moveTarget and move.moveTarget.Parent then
+                move.moveTarget.CFrame = targetCFrame
+                stopVelocity(move.moveTarget)
+            else
+                root.CFrame = targetCFrame
+                stopVelocity(root)
+            end
             ACTIVE_PROXY_MOVE = nil
             cleanupProxyMove(move)
             return true, remaining
@@ -1095,13 +1143,15 @@ function Tween(targetCFrame, targetInstanceOrDist)
     if not cf then return end
 
     local arriveDistance = 5
+    local moveTarget = nil
+
     if typeof(targetInstanceOrDist) == "number" then
         arriveDistance = targetInstanceOrDist
     elseif typeof(targetInstanceOrDist) == "Instance" and targetInstanceOrDist:IsA("BasePart") then
-        cf = targetInstanceOrDist.CFrame
+        moveTarget = targetInstanceOrDist
     end
 
-    return tweenToCFrame(cf, arriveDistance)
+    return tweenToCFrame(cf, arriveDistance, nil, moveTarget)
 end
 
 local function TweenChest(chest, stopCondition)
@@ -1491,29 +1541,6 @@ local STANDARD_RACE_ORDER = { "Human", "Mink", "Fishman", "Skypiea" }
 local SPECIAL_RACE_ORDER = { "Cyborg", "Ghoul" }
 local RACE_ORDER = { "Human", "Mink", "Fishman", "Skypiea", "Cyborg", "Ghoul" }
 
-local raceAlias = {
-    human = "Human",
-    mink = "Mink",
-    rabbit = "Mink",
-    fishman = "Fishman",
-    shark = "Fishman",
-    skypiea = "Skypiea",
-    angel = "Skypiea",
-    ghoul = "Ghoul",
-    cyborg = "Cyborg",
-    draco = "Draco",
-}
-
-local function NormalizeRaceName(name)
-    local s = tostring(name or ""):lower():gsub("%s+", "")
-    return raceAlias[s] or tostring(name or "")
-end
-
-local function GetCurrentRace()
-    local raceVal = LocalPlayer.Data and LocalPlayer.Data:FindFirstChild("Race")
-    return NormalizeRaceName(raceVal and raceVal.Value or "")
-end
-
 local function GetFragments()
     local fragVal = LocalPlayer.Data and LocalPlayer.Data:FindFirstChild("Fragments")
     return tonumber(fragVal and fragVal.Value) or 0
@@ -1706,7 +1733,6 @@ end)
 
 -- ============================================================
 -- [ HUMAN V2 PLAYER SCRIPT LOOP ]
--- Tự động chạy playerv3.lua khi là Human V2 chưa đạt Full Power
 -- ============================================================
 local PLAYER_V3_URL = "https://raw.githubusercontent.com/longvu26092007-eng/hellobeo/refs/heads/main/playerv3.lua"
 local PLAYER_V3_FIRST_DELAY = 30
@@ -1930,75 +1956,78 @@ task.spawn(function()
                                 elseif CurrentRace == "Mink" then
                                     FarmBeli(function() return (ScanV3Titles(false)["Mink"] == true) end, nil, true)
                                 elseif CurrentRace == "Fishman" then
-                                    local TargetMelee = getgenv().Settings["Focus Melee"]
-                                    if CheckTool(TargetMelee) then
-                                        local function CE(x) return workspace.Enemies:FindFirstChild(x) or workspace.SeaBeasts:FindFirstChild(x) end
-                                        local e = CE("Piranha") or CE("Shark") or CE("Fish Crew Member")
-                                        local v = CE("SeaBeast1")
-                                        if e then Character.Humanoid.Sit = false
-                                            repeat task.wait() KillMonster(e.Name)
-                                            until not e or e.Humanoid.Health <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0
-                                        elseif v then Character.Humanoid.Sit = false
-                                            repeat task.wait()
-                                                FastAttack()
-                                                SetAimbotTarget(v.HumanoidRootPart)
-                                                Tween(v.HumanoidRootPart.CFrame * CFrame.new(0, (v.HumanoidRootPart.Position.Y > -300 and 500 or 1000), 0))
-                                                EquipWeapon(({"Melee", "Sword", "Gun", "Blox Fruit"})[math.random(4)])
-                                                local k = ({"Z", "X", "C", "V", "F"})[math.random(5)]
-                                                if not Character:FindFirstChild("Portal-Portal") then
-                                                    if CheckCooldownSkill(k) then
-                                                        PressKeyEvent(k, 0.5)
+                                    -- ============================================================
+                                    -- [ BẢN GỐC FISHMAN V3 (Speed: 150 studs/s) ]
+                                    -- ============================================================
+                                    local TargetMelee = getgenv().Settings["Focus Melee"][cite: 2]
+                                    if CheckTool(TargetMelee) then[cite: 2]
+                                        local function CE(x) return workspace.Enemies:FindFirstChild(x) or workspace.SeaBeasts:FindFirstChild(x) end[cite: 2]
+                                        local e = CE("Piranha") or CE("Shark") or CE("Fish Crew Member")[cite: 2]
+                                        local v = CE("SeaBeast1")[cite: 2]
+                                        if e then Character.Humanoid.Sit = false[cite: 2]
+                                            repeat task.wait() KillMonster(e.Name)[cite: 2]
+                                            until not e or e.Humanoid.Health <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0[cite: 2]
+                                        elseif v then Character.Humanoid.Sit = false[cite: 2]
+                                            repeat task.wait()[cite: 2]
+                                                FastAttack()[cite: 2]
+                                                SetAimbotTarget(v.HumanoidRootPart)[cite: 2]
+                                                Tween(v.HumanoidRootPart.CFrame * CFrame.new(0, (v.HumanoidRootPart.Position.Y > -300 and 500 or 1000), 0))[cite: 2]
+                                                EquipWeapon(({"Melee", "Sword", "Gun", "Blox Fruit"})[math.random(4)])[cite: 2]
+                                                local k = ({"Z", "X", "C", "V", "F"})[math.random(5)][cite: 2]
+                                                if not Character:FindFirstChild("Portal-Portal") then[cite: 2]
+                                                    if CheckCooldownSkill(k) then[cite: 2]
+                                                        PressKeyEvent(k, 0.5)[cite: 2]
                                                     end
                                                 end
-                                            until not v or not v:FindFirstChild("Health") or v.Health.Value <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0
+                                            until not v or not v:FindFirstChild("Health") or v.Health.Value <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0[cite: 2]
                                         else
-                                            local BOAT = CheckOwnerBoat()
-                                            if BOAT then
-                                                if not Character.Humanoid.Sit then Tween(BOAT.VehicleSeat.CFrame)
-                                                    NeedSit = true
-                                                else Tween(CFrame.new(-1000000, 49, 1000000), BOAT:FindFirstChild("Engine"))
-                                                task.delay(5, function() Tween(false) end)
+                                            local BOAT = CheckOwnerBoat()[cite: 2]
+                                            if BOAT then[cite: 2]
+                                                if not Character.Humanoid.Sit then Tween(BOAT.VehicleSeat.CFrame)[cite: 2]
+                                                    NeedSit = true[cite: 2]
+                                                else Tween(CFrame.new(-1000000, 49, 1000000), BOAT:FindFirstChild("Engine"))[cite: 2]
+                                                task.delay(5, function() Tween(false) end)[cite: 2]
                                                 end
                                             else
-                                                local PlaceNPC = Vector3.new(-1, 10, 2960)
-                                                if (HumanoidRootPart.Position - PlaceNPC).Magnitude < 50 then
-                                                    COMMF_:InvokeServer("BuyBoat", LocalPlayer.Team.Name == "Marine" and "PirateSloop" or "PirateBrigade")
+                                                local PlaceNPC = Vector3.new(-1, 10, 2960)[cite: 2]
+                                                if (HumanoidRootPart.Position - PlaceNPC).Magnitude < 50 then[cite: 2]
+                                                    COMMF_:InvokeServer("BuyBoat", LocalPlayer.Team.Name == "Marine" and "PirateSloop" or "PirateBrigade")[cite: 2]
                                                 else
-                                                    Character.Humanoid.Sit = false
-                                                    Tween(CFrame.new(PlaceNPC))
+                                                    Character.Humanoid.Sit = false[cite: 2]
+                                                    Tween(CFrame.new(PlaceNPC))[cite: 2]
                                                 end
                                             end
                                         end
-                                    else Character.Humanoid.Sit = false
-                                        local npcName = MeleeData[TargetMelee] or TargetMelee
-                                        local x, d = GetCFrameByNPC(npcName)
-                                        if x then
-                                            if d < 50 then
-                                                if TargetMelee == "Dragon Claw" then
-                                                    COMMF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
-                                                elseif TargetMelee == "Sharkman Karate" then
-                                                    local hasSharkman = CheckTool("Sharkman Karate") or CheckInventory("Sharkman Karate")
-                                                    if not hasSharkman and COMMF_:InvokeServer("BuySharkmanKarate", true) == 1 then
-                                                        local pos = CFrame.new(-2599.621826171875, 238.19833374023438, -10315.998046875)
-                                                        repeat task.wait() Tween(pos) until CheckDistance(pos) <= 30
-                                                        COMMF_:InvokeServer("BuySharkmanKarate")
+                                    else Character.Humanoid.Sit = false[cite: 2]
+                                        local npcName = MeleeData[TargetMelee] or TargetMelee[cite: 2]
+                                        local x, d = GetCFrameByNPC(npcName)[cite: 2]
+                                        if x then[cite: 2]
+                                            if d < 50 then[cite: 2]
+                                                if TargetMelee == "Dragon Claw" then[cite: 2]
+                                                    COMMF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")[cite: 2]
+                                                elseif TargetMelee == "Sharkman Karate" then[cite: 2]
+                                                    local hasSharkman = CheckTool("Sharkman Karate") or CheckInventory("Sharkman Karate")[cite: 2]
+                                                    if not hasSharkman and COMMF_:InvokeServer("BuySharkmanKarate", true) == 1 then[cite: 2]
+                                                        local pos = CFrame.new(-2599.621826171875, 238.19833374023438, -10315.998046875)[cite: 2]
+                                                        repeat task.wait() Tween(pos) until CheckDistance(pos) <= 30[cite: 2]
+                                                        COMMF_:InvokeServer("BuySharkmanKarate")[cite: 2]
                                                     end
                                                 else
-                                                    COMMF_:InvokeServer("Buy"..TargetMelee:gsub("%s+", ""))
+                                                    COMMF_:InvokeServer("Buy"..TargetMelee:gsub("%s+", ""))[cite: 2]
                                                 end
                                             else
-                                                SetText("Travel To ".. npcName.. " NPC")
-                                                Tween(x)
+                                                SetText("Travel To ".. npcName.. " NPC")[cite: 2]
+                                                Tween(x)[cite: 2]
                                             end
                                         else
-                                            SetText("Can't find ".. npcName.. " NPC")
-                                            Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-                                            LocalPlayer.CharacterAdded:Wait()
-                                            local needSea = GetMeleeTargetSea(TargetMelee)
-                                            if needSea == 2 then COMMF_:InvokeServer("TravelDressrosa")
-                                            elseif needSea == 3 then COMMF_:InvokeServer("TravelZou") end
+                                            SetText("Can't find ".. npcName.. " NPC")[cite: 2]
+                                            Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)[cite: 2]
+                                            LocalPlayer.CharacterAdded:Wait()[cite: 2]
+                                            local needSea = GetMeleeTargetSea(TargetMelee)[cite: 2]
+                                            if needSea == 2 then COMMF_:InvokeServer("TravelDressrosa")[cite: 2]
+                                            elseif needSea == 3 then COMMF_:InvokeServer("TravelZou") end[cite: 2]
                                         end
-                                     end
+                                    end
                                 elseif CurrentRace == "Skypiea" then
                                     local x = nil
                                     for _, v in next, Players:GetPlayers() do
@@ -2029,7 +2058,6 @@ task.spawn(function()
                                         HopServerBrowser()
                                     end
                                 elseif CurrentRace == "Ghoul" then
-                                    -- Nhiệm vụ Ghoul V3: Tiêu diệt 5 người chơi
                                     local targetPlr = nil
                                     for _, v in next, Players:GetPlayers() do
                                         if v.Name ~= LocalPlayer.Name and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
