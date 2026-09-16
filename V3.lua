@@ -1928,8 +1928,6 @@ end
 -- Boat movement is handled separately from character Tween().
 -- Character/Sea Beast movement continues to use the new proxy tween system.
 -- ============================================================
-local SHARK_V3_BOAT_TARGET = CFrame.new(-67, 5.5647872686386108, 4380)
-local sharkV3LastBoatMove = 0
 
 local function SharkV3GetPlayerBoat()
     local boats = workspace:FindFirstChild("Boats")
@@ -2039,70 +2037,70 @@ local function SharkV3ResetMovement()
     end
 end
 
-local function SharkV3SeatPlayer(boat)
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local seat = boat and boat:FindFirstChild("VehicleSeat", true)
-    if not (char and hum and root and seat and seat:IsA("BasePart") and hum.Health > 0) then
+local function SharkV3BoatStep()
+    local boat = SharkV3GetPlayerBoat()
+
+    if not boat then
+        SharkV3ResetMovement()
+
+        local buyBoatPos = CFrame.new(-14, 10, 2955)
+        SetText("Shark V3 | Buying PirateBrigade boat")
+
+        -- Use the NEW character proxy tween, but keep the exact standalone
+        -- boat-buy coordinate and behavior.
+        NeedSit = false
+        Tween(buyBoatPos)
+
+        if CheckDistance(buyBoatPos) < 10 then
+            pcall(function()
+                COMMF_:InvokeServer("BuyBoat", "PirateBrigade")
+            end)
+            task.wait(2)
+        end
+
         return false
     end
 
-    if seat:IsA("VehicleSeat") and seat.Occupant == hum then
-        NeedSit = true
-        return true
+    local seat = boat:FindFirstChild("VehicleSeat")
+    if not seat or not seat:IsA("BasePart") then
+        NeedSit = false
+        SetText("Shark V3 | Boat missing VehicleSeat")
+        return false
     end
 
-    NeedSit = false
-    hum.Sit = false
-    local moved = tweenToCFrame(seat.CFrame * CFrame.new(0, 2, 0), 6, function()
-        return not boat.Parent or hum.Health <= 0
-    end)
+    -- Keep this EXACTLY like the tested standalone flow.
+    local targetBoatCFrame = CFrame.new(
+        -67,
+        5.5647872686386108,
+        4205 + math.random(1, 400)
+    )
 
-    if moved or (root.Position - seat.Position).Magnitude <= 8 then
+    if CheckDistance(seat.CFrame, targetBoatCFrame) > 800 then
+        SetText("Shark V3 | Move boat to sea")
+
+        -- Do NOT PivotTo the model and do NOT use Tween(target, Engine).
+        -- The tested flow moves VehicleSeat directly.
         pcall(function()
-            seat:Sit(hum)
+            seat.CFrame = targetBoatCFrame
         end)
-        task.wait(0.35)
-    end
-
-    local seated = hum.Sit or (seat:IsA("VehicleSeat") and seat.Occupant == hum)
-    NeedSit = seated
-    return seated
-end
-
-local function SharkV3MoveBoatToSea(boat)
-    local seat = boat and boat:FindFirstChild("VehicleSeat", true)
-    if not (boat and boat.Parent and seat and seat:IsA("BasePart")) then
+        task.wait(0.5)
         return false
     end
 
-    local distance = (seat.Position - SHARK_V3_BOAT_TARGET.Position).Magnitude
-    if distance <= 450 then
-        return true
-    end
+    if CheckDistance(seat.CFrame) > 5 then
+        SetText("Shark V3 | Tween to boat seat")
+        NeedSit = false
 
-    if tick() - sharkV3LastBoatMove < 1 then
+        -- Only the PLAYER uses the new proxy tween.
+        Tween(seat.CFrame + Vector3.new(0, math.random(-1, 2), 0))
         return false
     end
-    sharkV3LastBoatMove = tick()
 
-    SetText(string.format("Shark V3 | Moving boat to sea | %dm", math.floor(distance)))
-
-    local ok = pcall(function()
-        local pivot = boat:GetPivot()
-        local delta = SHARK_V3_BOAT_TARGET * seat.CFrame:Inverse()
-        boat:PivotTo(delta * pivot)
-    end)
-
-    if not ok then
-        pcall(function()
-            seat.CFrame = SHARK_V3_BOAT_TARGET
-        end)
-    end
-
-    task.wait(0.35)
-    return boat.Parent and (seat.Position - SHARK_V3_BOAT_TARGET.Position).Magnitude <= 650
+    -- No timeout and no hop here. The boat may need to stay in this
+    -- Sea Beast spawn area for a long time.
+    NeedSit = true
+    SetText("Shark V3 | Waiting for Sea Beast")
+    return true
 end
 
 local function SharkV3FightSeaBeast(seaBeast)
@@ -2188,44 +2186,7 @@ local function RunSharkV3Quest()
         return
     end
 
-    local boat = SharkV3GetPlayerBoat()
-    if not boat then
-        SharkV3ResetMovement()
-    
-        local buyBoatPos = CFrame.new(-14, 10, 2955)
-        SetText("Shark V3 | Buying PirateBrigade boat")
-        tweenToCFrame(buyBoatPos, 10)
-
-        if HumanoidRootPart and (HumanoidRootPart.Position - buyBoatPos.Position).Magnitude <= 15 then
-            pcall(function()
-                COMMF_:InvokeServer("BuyBoat", LocalPlayer.Team and LocalPlayer.Team.Name == "Marine" and "PirateSloop" or "PirateBrigade")
-            end)
-            task.wait(0.8)
-        end
-        return
-    end
-
-    local seat = boat:FindFirstChild("VehicleSeat", true)
-    if not seat then
-        SharkV3ResetMovement()
-        SetText("Shark V3 | Boat missing VehicleSeat")
-        return
-    end
-
-    if not SharkV3SeatPlayer(boat) then
-        SetText("Shark V3 | Getting into boat")
-        return
-    end
-
-    if not SharkV3MoveBoatToSea(boat) then
-        return
-    end
-
-    -- Keep the boat parked in the Sea Beast spawn area indefinitely.
-    -- Do not hop because of elapsed waiting time; Sea Beast spawning may
-    -- require the boat to remain at this location for a long time.
-    NeedSit = true
-    SetText("Shark V3 | Waiting Sea Beast")
+    SharkV3BoatStep()
 end
 
 -- ============================================================
