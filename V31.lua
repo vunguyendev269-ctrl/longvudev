@@ -1,46 +1,47 @@
 local MeleeData = {
-    ["Black Leg"] = "Dark Step Teacher",
-    ["Electro"] = "Mad Scientist",
-    ["Fishman Karate"] = "Water Kung-fu Teacher",
-    ["Dragon Claw"] = "Sabi",
-    ["Superhuman"] = "Martial Arts Master",
-    ["Death Step"] = "Phoeyu, the Reformed",
-    ["Sharkman Karate"] = "Sharkman Teacher",
-    ["Electric Claw"] = "Previous Hero",
-    ["Dragon Talon"] = "Uzoth",
-    ["Godhuman"] = "Ancient Monk",
-    ["Sanguine Art"] = "Shafi",
-}
+    ["Black Leg"] = "Dark Step Teacher";
+    ["Electro"] = "Mad Scientist";
+    ["Fishman Karate"] = "Water Kung-fu Teacher";
+    ["Dragon Claw"] = "Sabi";
+    ["Superhuman"] = "Martial Arts Master";
+    ["Death Step"] = "Phoeyu, the Reformed";
+    ["Sharkman Karate"] = "Sharkman Teacher";
+    ["Electric Claw"] = "Previous Hero";
+    ["Dragon Talon"] = "Uzoth";
+    ["Godhuman"] = "Ancient Monk";
+    ["Sanguine Art"] = "Shafi";
+};
 
 getgenv().Settings = getgenv().Settings or {
     ["API"] = {
-        ["URL"] = "",
-        ["Method"] = "GET",
+        ["URL"] = "";
+        ["Method"] = "GET";
         ["Headers"] = {
-            ["Content-Type"] = "application/json",
-        },
+            ["Content-Type"] = "application/json";
+        };
         ["Body"] = {
-            ["Player"] = "",
-            ["PlayerId"] = "",
-        },
-    },
-    ["Focus Melee"] = "Sharkman Karate",
+            ["Player"] = "";
+            ["PlayerId"] = "";
+        };
+    };
+    ["Focus Melee"] = "Sharkman Karate";
     ["Races"] = {
-        ["Human"] = true,
-        ["Mink"] = false,      
-        ["Fishman"] = false,   
-        ["Skypiea"] = false,   
-        ["Cyborg"] = false,
-        ["Ghoul"] = false,
-    },
-    ["Max Chests"] = 50,
-    ["Skip Chest Delay"] = 1,
-    ["Black Screen"] = false,
-    ["Reset After Collect Chests"] = 10,
-    ["Katakuri Progress"] = 300,
-    ["Fragments"] = 5000,
-    ["Chest Touch Radius"] = 8,
-    ["Flower Touch Radius"] = 8,
+        ["Human"] = true;
+        ["Mink"] = false;      
+        ["Fishman"] = false;   
+        ["Skypiea"] = false;   
+        ["Cyborg"] = false;
+        ["Ghoul"] = false;
+    };
+    ["Max Chests"] = 50;
+    ["Mink V3 Chests"] = 30;
+    ["Skip Chest Delay"] = 1;
+    ["Black Screen"] = false;
+    ["Reset After Collect Chests"] = 10;
+    ["Katakuri Progress"] = 300;
+    ["Fragments"] = 5000;
+    ["Chest Touch Radius"] = 8;
+    ["Flower Touch Radius"] = 8;
 }
 
 getgenv().Races = getgenv().Races or getgenv().Settings["Races"]
@@ -49,8 +50,8 @@ getgenv().id1 = getgenv().id1 or "........."
 getgenv().id2 = getgenv().id2 or "........."
 
 local SeaMelee = {
-    [2] = {"Dragon Claw", "Superhuman", "Death Step", "Sharkman Karate"},
-    [3] = {"Electric Claw", "Dragon Talon", "Godhuman", "Sanguine Art"},
+    [2] = {"Dragon Claw", "Superhuman", "Death Step", "Sharkman Karate"};
+    [3] = {"Electric Claw", "Dragon Talon", "Godhuman", "Sanguine Art"};
 }
 local function GetMeleeTargetSea(meleeName)
     if type(meleeName) ~= "string" then return 1 end
@@ -95,8 +96,7 @@ COMMF_ = ReplicatedStorage:WaitForChild("Remotes") and ReplicatedStorage.Remotes
 ServerBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser")
 LocalPlayer = Players.LocalPlayer
 LocalPlayer.CharacterAdded:Connect(function(v)
-    Character = v
-    Humanoid = v:WaitForChild("Humanoid")
+    Character = v Humanoid = v:WaitForChild("Humanoid")
     HumanoidRootPart = v:WaitForChild("HumanoidRootPart")
 end)
 if LocalPlayer.Character then
@@ -105,10 +105,7 @@ if LocalPlayer.Character then
     HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart") or Character:WaitForChild("HumanoidRootPart")
 end
 
-pcall(function()
-    StarterGui:SetCore("SendNotification", {Title = "Executed", Text = "Loading… Please wait", Subtext = "VuNguyen KaitunV3 Premium", Duration = 5})
-end)
-
+StarterGui:SetCore("SendNotification", {Title = "Executed", Text = "Loading… Please wait", Subtext = "VuNguyen KaitunV3 Premium", Duration = 5})
 if not game:IsLoaded() or workspace.DistributedGameTime <= 10 then
     local WFGTL = COREGUI:FindFirstChild("WFGTL") or Instance.new("Hint", COREGUI)
     WFGTL.Text = "Just a moment... Waiting while the game loads - This won't take long!"
@@ -258,29 +255,6 @@ local function ScanV3Titles(force)
     return titleCache.map
 end
 
-local raceAlias = {
-    human = "Human",
-    mink = "Mink",
-    rabbit = "Mink",
-    fishman = "Fishman",
-    shark = "Fishman",
-    skypiea = "Skypiea",
-    angel = "Skypiea",
-    ghoul = "Ghoul",
-    cyborg = "Cyborg",
-    draco = "Draco",
-}
-
-local function NormalizeRaceName(name)
-    local s = tostring(name or ""):lower():gsub("%s+", "")
-    return raceAlias[s] or tostring(name or "")
-end
-
-local function GetCurrentRace()
-    local raceVal = LocalPlayer.Data and LocalPlayer.Data:FindFirstChild("Race")
-    return NormalizeRaceName(raceVal and raceVal.Value or "")
-end
-
 -- ============================================================
 -- [ MODERN UI (VuNguyen KaitunV3 Premium) ]
 -- ============================================================
@@ -358,7 +332,7 @@ do
     StatusLabel.BackgroundTransparency = 1
     StatusLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
     StatusLabel.Size = UDim2.new(1, -20, 1, -10)
-    StatusLabel.Font = Enum.Font.GothamBold
+    StatusLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
     StatusLabel.Text = "Status: Starting..."
     StatusLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
     StatusLabel.TextSize = 17
@@ -412,7 +386,7 @@ do
     Top_1.Name = "Top"
     Top_1.Parent = HeaderFrame
     Top_1.Size = UDim2.new(1, 0, 1, 0)
-    Top_1.Font = Enum.Font.GothamBold
+    Top_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy)
     Top_1.Text = 'VuNguyen KaitunV3  <font color="#FFD700">[ PREMIUM ]</font>'
     Top_1.TextColor3 = Color3.fromRGB(255, 80, 80)
     Top_1.TextSize = 22
@@ -451,7 +425,7 @@ do
     UnderStats_1.Parent = StatsCard
     UnderStats_1.Position = UDim2.new(0, 16, 0, 8)
     UnderStats_1.Size = UDim2.new(1, -32, 0, 18)
-    UnderStats_1.Font = Enum.Font.GothamBold
+    UnderStats_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
     UnderStats_1.Text = "ACCOUNT OVERVIEW"
     UnderStats_1.TextColor3 = Color3.fromRGB(255, 110, 110)
     UnderStats_1.TextSize = 13
@@ -463,7 +437,7 @@ do
     CharacterLabel.Parent = StatsCard
     CharacterLabel.Position = UDim2.new(0, 16, 0, 32)
     CharacterLabel.Size = UDim2.new(0.48, 0, 0, 20)
-    CharacterLabel.Font = Enum.Font.GothamSemibold
+    CharacterLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
     CharacterLabel.Text = "Character: N/A"
     CharacterLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
     CharacterLabel.TextSize = 14
@@ -476,7 +450,7 @@ do
     RaceLabel_1.Parent = StatsCard
     RaceLabel_1.Position = UDim2.new(0.52, 0, 0, 32)
     RaceLabel_1.Size = UDim2.new(0.46, 0, 0, 20)
-    RaceLabel_1.Font = Enum.Font.GothamSemibold
+    RaceLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
     RaceLabel_1.Text = "Current Race: N/A"
     RaceLabel_1.TextColor3 = Color3.fromRGB(230, 230, 235)
     RaceLabel_1.TextSize = 14
@@ -489,7 +463,7 @@ do
     BeliLabel_1.Parent = StatsCard
     BeliLabel_1.Position = UDim2.new(0, 16, 0, 58)
     BeliLabel_1.Size = UDim2.new(0.48, 0, 0, 20)
-    BeliLabel_1.Font = Enum.Font.GothamSemibold
+    BeliLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
     BeliLabel_1.Text = "Beli: 0"
     BeliLabel_1.TextColor3 = Color3.fromRGB(100, 255, 140)
     BeliLabel_1.TextSize = 14
@@ -501,7 +475,7 @@ do
     FragLabel_1.Parent = StatsCard
     FragLabel_1.Position = UDim2.new(0.52, 0, 0, 58)
     FragLabel_1.Size = UDim2.new(0.46, 0, 0, 20)
-    FragLabel_1.Font = Enum.Font.GothamSemibold
+    FragLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
     FragLabel_1.Text = "Fragments: 0"
     FragLabel_1.TextColor3 = Color3.fromRGB(175, 150, 255)
     FragLabel_1.TextSize = 14
@@ -513,7 +487,7 @@ do
     GoalLabel.Parent = StatsCard
     GoalLabel.Position = UDim2.new(0, 16, 0, 84)
     GoalLabel.Size = UDim2.new(1, -32, 0, 18)
-    GoalLabel.Font = Enum.Font.Gotham
+    GoalLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
     GoalLabel.Text = "Server: -- | Job: --"
     GoalLabel.TextColor3 = Color3.fromRGB(150, 155, 175)
     GoalLabel.TextSize = 12
@@ -525,7 +499,7 @@ do
     UnderRace_1.Parent = Main_1
     UnderRace_1.Position = UDim2.new(0.06, 0, 0, 180)
     UnderRace_1.Size = UDim2.new(0.88, 0, 0, 22)
-    UnderRace_1.Font = Enum.Font.GothamBold
+    UnderRace_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
     UnderRace_1.Text = "RACE V3 PROGRESSION (CONFIG SYNCED)"
     UnderRace_1.TextColor3 = Color3.fromRGB(255, 110, 110)
     UnderRace_1.TextSize = 13
@@ -580,7 +554,7 @@ do
         titleLabel.BackgroundTransparency = 1
         titleLabel.Position = UDim2.new(0, 10, 0, 4)
         titleLabel.Size = UDim2.new(0.6, 0, 0, 18)
-        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
         titleLabel.Text = info.v3
         titleLabel.TextColor3 = info.color
         titleLabel.TextSize = 14
@@ -592,7 +566,7 @@ do
         stateLabel.BackgroundTransparency = 1
         stateLabel.Position = UDim2.new(0, 10, 0, 22)
         stateLabel.Size = UDim2.new(0.6, 0, 0, 16)
-        stateLabel.Font = Enum.Font.GothamSemibold
+        stateLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
         stateLabel.Text = "🔴 MISSING"
         stateLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
         stateLabel.TextSize = 12
@@ -605,7 +579,7 @@ do
         cfgBadge.Position = UDim2.new(1, -10, 0.5, 0)
         cfgBadge.Size = UDim2.new(0, 52, 0, 22)
         cfgBadge.BackgroundColor3 = Color3.fromRGB(30, 33, 46)
-        cfgBadge.Font = Enum.Font.GothamBold
+        cfgBadge.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
         cfgBadge.Text = "OFF"
         cfgBadge.TextColor3 = Color3.fromRGB(150, 150, 160)
         cfgBadge.TextSize = 11
@@ -692,10 +666,7 @@ end
 
 pcall(function() LocalPlayer.PlayerGui:FindFirstChild("Blank"):Destroy() end)
 local BlankScreen = LocalPlayer.PlayerGui:FindFirstChild("Blank") or Instance.new("ScreenGui", LocalPlayer.PlayerGui)
-BlankScreen.Name = "Blank"
-BlankScreen.ResetOnSpawn = false
-BlankScreen.DisplayOrder = -math.huge
-BlankScreen.IgnoreGuiInset = true
+BlankScreen.Name = "Blank" BlankScreen.ResetOnSpawn = false BlankScreen.DisplayOrder = -math.huge BlankScreen.IgnoreGuiInset = true
 
 local Black = BlankScreen:FindFirstChild("Black Screen") or Instance.new("Frame", BlankScreen)
 Black.Name = "Black Screen"
@@ -735,13 +706,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.F4 then
         Black.Visible = not Black.Visible
         RunService:Set3dRenderingEnabled(not Black.Visible)
-        pcall(function()
-            StarterGui:SetCore("SendNotification", {
-                Title = "Black Screen",
-                Text = Black.Visible and "Đã BẬT màn hình đen (Tắt Render 3D)" or "Đã TẮT màn hình đen (Bật Render 3D)",
-                Duration = 2
-            })
-        end)
+        StarterGui:SetCore("SendNotification", {
+            Title = "Black Screen",
+            Text = Black.Visible and "Đã BẬT màn hình đen (Tắt Render 3D)" or "Đã TẮT màn hình đen (Bật Render 3D)",
+            Duration = 2
+        })
     end
 end)
 
@@ -762,51 +731,30 @@ leftButton.MouseButton1Click:Connect(function()
     end
 end)
 
-function CheckSea(v)
-    return v == tonumber(workspace:GetAttribute("MAP"):match("%d+"))
-end
-
+function CheckSea(v: number) return v == tonumber(workspace:GetAttribute("MAP"):match("%d+")) end
 local remoteAttack, idremote
 local seed = ReplicatedStorage.Modules.Net.seed:InvokeServer()
-task.spawn(function()
-    for _, v in next, ({ReplicatedStorage.Util, ReplicatedStorage.Common, ReplicatedStorage.Remotes, ReplicatedStorage.Assets, ReplicatedStorage.FX}) do
-        for _, n in next, v:GetChildren() do
-            if n:IsA("RemoteEvent") and n:GetAttribute("Id") then
-                remoteAttack, idremote = n, n:GetAttribute("Id")
-            end
-        end
-        v.ChildAdded:Connect(function(n)
-            if n:IsA("RemoteEvent") and n:GetAttribute("Id") then
-                remoteAttack, idremote = n, n:GetAttribute("Id")
-            end
-        end)
-    end
-end)
-
-CheckLocation = function(v) return LocalPlayer:GetAttribute("CurrentLocation") == v end
-CheckMap = function(v) return workspace.Map:FindFirstChild(v) or false end
-CheckTool = function(v)
+task.spawn((function() for _, v in next, ({ReplicatedStorage.Util, ReplicatedStorage.Common, ReplicatedStorage.Remotes, ReplicatedStorage.Assets, ReplicatedStorage.FX}) do
+    for _, n in next, v:GetChildren() do if n:IsA("RemoteEvent") and n:GetAttribute("Id") then remoteAttack, idremote = n, n:GetAttribute("Id") end
+    end v.ChildAdded:Connect(function(n) if n:IsA("RemoteEvent") and n:GetAttribute("Id") then remoteAttack, idremote = n, n:GetAttribute("Id")
+    end end) end
+end))
+CheckLocation = (function(v)return LocalPlayer:GetAttribute("CurrentLocation") == v end)
+CheckMap = (function(v) return workspace.Map:FindFirstChild(v) or false end)
+CheckTool = (function(v)
     for _, x in next, {LocalPlayer.Backpack, Character} do
-        for _, v2 in next, x:GetChildren() do
-            if v2:IsA("Tool") and (v2.Name == v or v2.Name:find(v)) then return true end
-        end
-    end
-    return false
-end
-CheckMaterial = function(x)
+    for _, v2 in next, x:GetChildren() do if v2:IsA("Tool") and (v2.Name == v or v2.Name:find(v)) then return true end
+    end end return false
+end)
+CheckMaterial = (function(x)
+    for _, v in pairs(COMMF_:InvokeServer("getInventory")) do if v.Type == "Material" then if v.Name == x then return v.Count end end
+    end return 0
+end)
+CheckInventory = (function(...)
     for _, v in pairs(COMMF_:InvokeServer("getInventory")) do
-        if v.Type == "Material" and v.Name == x then return v.Count end
-    end
-    return 0
-end
-CheckInventory = function(...)
-    for _, v in pairs(COMMF_:InvokeServer("getInventory")) do
-        for _, n in next, {...} do
-            if v.Name == n then return true end
-        end
-    end
-    return false
-end
+    for _, n in next, {...} do if v.Name == n then return true end end
+    end return false
+end)
 
 IsDied = function(v)
     local ok, r = xpcall(function()
@@ -821,40 +769,32 @@ IsDied = function(v)
     return ok and r or false
 end
 
-CheckMonster = function(...)
-    local args = {...}
+CheckMonster = (function(...) local args = {...}
     local v2 = {workspace.Enemies, ReplicatedStorage}
-    for i = 1, #args do
-        local n = args[i]
+    for i = 1, #args do local n = args[i]
         local m = workspace.Enemies:FindFirstChild(n) or ReplicatedStorage:FindFirstChild(n)
         if m and m:IsA("Model") and m.Name ~= "Blank Buddy" then
-            local h = m:FindFirstChildWhichIsA("Humanoid")
-            local r = m:FindFirstChild("HumanoidRootPart")
+            local h = m:FindFirstChildWhichIsA("Humanoid") local r = m:FindFirstChild("HumanoidRootPart")
             if h and r and not IsDied(m) then return m end
         end
     end
-    for c = 1, #v2 do
-        local container = v2[c]
-        local ms = container:GetChildren()
-        for m = 1, #ms do
-            local model = ms[m]
-            local h = model:FindFirstChildWhichIsA("Humanoid")
-            local r = model:FindFirstChild("HumanoidRootPart")
-            if model:IsA("Model") and h and r and not IsDied(model) and model.Name ~= "Blank Buddy" then
-                for i = 1, #args do
-                    local n = args[i]
-                    if model.Name == n or model.Name:lower():find(n:lower()) then
-                        return model
+    for c = 1, #v2 do local container = v2[c] local ms = container:GetChildren()
+        for m = 1, #ms do local m = ms[m] local h = m:FindFirstChildWhichIsA("Humanoid")
+            local r = m:FindFirstChild("HumanoidRootPart")
+            if m:IsA("Model") and h and r and not IsDied(m) and m.Name ~= "Blank Buddy" then
+                for i = 1, #args do local n = args[i]
+                    if m.Name == n or m.Name:lower():find(n:lower()) then
+                        return m
                     end
                 end
             end
         end
     end
     return false
-end
+end)
 
 local lastEquip = tick()
-EquipWeapon = function(v)
+EquipWeapon = (function(v)
     if tick() - lastEquip <= 0.2 then return end
     lastEquip = tick()
     if not Character then return end
@@ -866,7 +806,7 @@ EquipWeapon = function(v)
             return
         end
     end
-end
+end)
 
 function GetPosition(v)
     if not v then return nil
@@ -917,40 +857,34 @@ GetNPCMelee = function(xn)
 end
 
 local lastCallFA = tick()
-FastAttack = function(x)
+FastAttack = (function(x)
     if not HumanoidRootPart or not Character:FindFirstChildWhichIsA("Humanoid") or Character.Humanoid.Health <= 0 or not Character:FindFirstChildWhichIsA("Tool") then return end
     local FAD = 0.01
     if FAD ~= 0 and tick() - lastCallFA <= FAD then return end
     local t = {}
     for _, u in next, {workspace.Characters, workspace.Enemies} do
         for _, e in next, u:GetChildren() do
-            local h = e:FindFirstChildWhichIsA("Humanoid")
-            local hrp = e:FindFirstChild("HumanoidRootPart")
-            if e ~= Character and (x and e.Name == x or not x) and h and hrp and not IsDied(e) and (hrp.Position - HumanoidRootPart.Position).Magnitude <= 65 then
-                t[#t + 1] = e
-            end
+            local h = e:FindFirstChildWhichIsA("Humanoid") local hrp = e:FindFirstChild("HumanoidRootPart")
+            if e ~= Character and (x and e.Name == x or not x) and h and hrp and not IsDied(e) and (hrp.Position - HumanoidRootPart.Position).Magnitude <= 65 then t[#t + 1] = e end
         end
     end
     local n = ReplicatedStorage.Modules.Net
     local h = {[2] = {}}
     local last
-    for i = 1, #t do
-        local v = t[i]
+    for i = 1, #t do local v = t[i]
         local part = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
         if not h[1] then h[1] = part end
-        h[2][#h[2] + 1] = {v, part}
-        last = v
+        h[2][#h[2] + 1] = {v, part} last = v
     end
     n:FindFirstChild("RE/RegisterAttack"):FireServer()
     n:FindFirstChild("RE/RegisterHit"):FireServer(unpack(h))
-    cloneref(remoteAttack):FireServer(string.gsub("RE/RegisterHit", ".", function(c)
+    cloneref(remoteAttack):FireServer(string.gsub("RE/RegisterHit", ".",function(c)
         return string.char(bit32.bxor(string.byte(c), math.floor(workspace:GetServerTimeNow()/10%10)+1))
     end), bit32.bxor(idremote+909090, seed*2), unpack(h))
     lastCallFA = tick()
-end
+end)
 
-CheckDistance = function(a, b)
-    b = b or Character
+CheckDistance = function(a, b) b = b or Character
     local pa, pb = GetPosition(a), GetPosition(b)
     if pa and pb then return (pa - pb).Magnitude end
     return math.huge
@@ -968,18 +902,11 @@ local function ExitTheChar()
 end
 
 -- ============================================================
--- PROXY TWEEN SYSTEM (Tối ưu chống giật & chống loop cancel)
+-- PROXY TWEEN SYSTEM (Speed: 160 studs/s)
 -- ============================================================
 local TWEEN_SPEED = 160
 local ACTIVE_PROXY_MOVE = nil
 local PROXY_MOVE_SERIAL = 0
-
-local function getActiveTweenSpeed()
-    if GetCurrentRace and GetCurrentRace() == "Fishman" then
-        return 150
-    end
-    return TWEEN_SPEED
-end
 
 local function stopVelocity(root)
     if not root or not root.Parent then return end
@@ -1010,13 +937,13 @@ local function cleanupProxyMove(move)
 end
 
 local function cancelProxyTween()
-    PROXY_MOVE_SERIAL = PROXY_MOVE_SERIAL + 1
+    PROXY_MOVE_SERIAL += 1
     local move = ACTIVE_PROXY_MOVE
     ACTIVE_PROXY_MOVE = nil
     cleanupProxyMove(move)
 end
 
-local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTarget)
+local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition)
     assert(typeof(targetCFrame) == "CFrame", "targetCFrame must be CFrame")
     arriveDistance = tonumber(arriveDistance) or 5
 
@@ -1033,29 +960,16 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         ExitTheChar()
     end
 
-    local startPos = (moveTarget and moveTarget:IsA("BasePart")) and moveTarget.Position or root.Position
-    local distance = (startPos - targetCFrame.Position).Magnitude
+    cancelProxyTween()
+
+    local distance = (root.Position - targetCFrame.Position).Magnitude
     if distance <= arriveDistance then
-        if moveTarget and moveTarget:IsA("BasePart") then
-            moveTarget.CFrame = targetCFrame
-            stopVelocity(moveTarget)
-        else
-            root.CFrame = targetCFrame
-            stopVelocity(root)
-        end
+        root.CFrame = targetCFrame
+        stopVelocity(root)
         return true, distance
     end
 
-    -- CHỐNG GIẬT: Nếu đang di chuyển đến cùng một vị trí (< 4 studs), tiếp tục giữ Tween
-    if ACTIVE_PROXY_MOVE and not ACTIVE_PROXY_MOVE.cleaned and ACTIVE_PROXY_MOVE.moveTarget == moveTarget then
-        if (ACTIVE_PROXY_MOVE.target.Position - targetCFrame.Position).Magnitude <= 4 then
-            return true, distance
-        end
-    end
-
-    cancelProxyTween()
-
-    PROXY_MOVE_SERIAL = PROXY_MOVE_SERIAL + 1
+    PROXY_MOVE_SERIAL += 1
     local moveId = PROXY_MOVE_SERIAL
 
     local proxy = Instance.new("Part")
@@ -1066,16 +980,14 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
     proxy.CanCollide = false
     proxy.CanQuery = false
     proxy.CanTouch = false
-    proxy.CFrame = CFrame.new(startPos)
+    proxy.CFrame = root.CFrame
     proxy.Parent = workspace
 
     local oldCollide = {}
-    local charPartsList = {}
     for _, obj in ipairs(char:GetDescendants()) do
         if obj:IsA("BasePart") then
             oldCollide[obj] = obj.CanCollide
             obj.CanCollide = false
-            table.insert(charPartsList, obj)
         end
     end
 
@@ -1085,10 +997,7 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         humanoid = hum,
         root = root,
         proxy = proxy,
-        target = targetCFrame,
-        moveTarget = moveTarget,
         oldCollide = oldCollide,
-        charParts = charPartsList,
         cleaned = false,
     }
 
@@ -1114,27 +1023,21 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
             return
         end
 
-        for i = 1, #move.charParts do
-            local p = move.charParts[i]
-            if p and p.Parent then
-                p.CanCollide = false
+        if not NeedSit then
+            currentHum.Sit = false
+        end
+
+        for _, obj in ipairs(current:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                obj.CanCollide = false
             end
         end
 
-        if move.moveTarget and move.moveTarget.Parent then
-            move.moveTarget.CFrame = proxy.CFrame
-            stopVelocity(move.moveTarget)
-        else
-            if not NeedSit then
-                currentHum.Sit = false
-            end
-            currentRoot.CFrame = proxy.CFrame
-            stopVelocity(currentRoot)
-        end
+        currentRoot.CFrame = proxy.CFrame
+        stopVelocity(currentRoot)
     end)
 
-    local currentSpeed = getActiveTweenSpeed()
-    local duration = math.max(distance / currentSpeed, 0.05)
+    local duration = math.max(distance / TWEEN_SPEED, 0.05)
     move.tween = TweenService:Create(
         proxy,
         TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
@@ -1162,13 +1065,8 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         if remaining <= arriveDistance then
             pcall(function() move.tween:Cancel() end)
             proxy.CFrame = targetCFrame
-            if move.moveTarget and move.moveTarget.Parent then
-                move.moveTarget.CFrame = targetCFrame
-                stopVelocity(move.moveTarget)
-            else
-                root.CFrame = targetCFrame
-                stopVelocity(root)
-            end
+            root.CFrame = targetCFrame
+            stopVelocity(root)
             ACTIVE_PROXY_MOVE = nil
             cleanupProxyMove(move)
             return true, remaining
@@ -1198,15 +1096,13 @@ function Tween(targetCFrame, targetInstanceOrDist)
     if not cf then return end
 
     local arriveDistance = 5
-    local moveTarget = nil
-
     if typeof(targetInstanceOrDist) == "number" then
         arriveDistance = targetInstanceOrDist
     elseif typeof(targetInstanceOrDist) == "Instance" and targetInstanceOrDist:IsA("BasePart") then
-        moveTarget = targetInstanceOrDist
+        cf = targetInstanceOrDist.CFrame
     end
 
-    return tweenToCFrame(cf, arriveDistance, nil, moveTarget)
+    return tweenToCFrame(cf, arriveDistance)
 end
 
 local function TweenChest(chest, stopCondition)
@@ -1260,40 +1156,33 @@ local function TweenFlower(flower, flowerName)
     return false
 end
 
-KillMonster = function(x)
+KillMonster=(function(x)
     xpcall(function()
         if workspace.Enemies:FindFirstChild(x) then
-            for _, v in next, workspace.Enemies:GetChildren() do
-                local vh = v:FindFirstChildWhichIsA("Humanoid")
-                local vhrp = v:FindFirstChild("HumanoidRootPart")
-                if vh and vhrp and v.Name == x and not IsDied(v) then
-                    local dx, dy, dz = HumanoidRootPart.Position.X - vhrp.Position.X, HumanoidRootPart.Position.Y - vhrp.Position.Y, HumanoidRootPart.Position.Z - vhrp.Position.Z
-                    local sqrMag = dx*dx + dy*dy + dz*dz
-                    if sqrMag <= 4900 then
+            for _,v in next,workspace.Enemies:GetChildren() do
+                local vh=v:FindFirstChildWhichIsA("Humanoid") local vhrp=v:FindFirstChild("HumanoidRootPart")
+                if vh and vhrp and v.Name==x and not IsDied(v) then
+                    local dx,dy,dz=HumanoidRootPart.Position.X-vhrp.Position.X, HumanoidRootPart.Position.Y-vhrp.Position.Y, HumanoidRootPart.Position.Z-vhrp.Position.Z
+                    local sqrMag=dx*dx+dy*dy+dz*dz
+                    if sqrMag<=4900 then
                         FastAttack(x)
                         Tween(CFrame.new(vhrp.Position + (vhrp.CFrame.LookVector * 20) + Vector3.new(0, vhrp.Position.Y > 60 and -20 or 20, 0)))
                         EquipWeapon("Melee")
                         return
                     end
-                    Tween(vhrp.CFrame)
-                    return
+                    Tween(vhrp.CFrame) return
                 end
             end
         end
-        for _, v in next, ReplicatedStorage:GetChildren() do
-            local vhrp = v:FindFirstChild("HumanoidRootPart")
-            if v:IsA("Model") and vhrp and v.Name == x and not IsDied(v) then
-                Tween(vhrp.CFrame)
-                return
-            end
+        for _,v in next,ReplicatedStorage:GetChildren() do
+            local vhrp=v:FindFirstChild("HumanoidRootPart")
+            if v:IsA("Model") and vhrp and v.Name==x and not IsDied(v) then Tween(vhrp.CFrame) return end
         end
-    end, function(e) warn("Modules ERROR:", e) end)
-end
+    end,function(e) warn("Modules ERROR:",e) end)
+end)
 
 local lastCheckSkill, MSkills = tick(), LocalPlayer.PlayerGui:WaitForChild("Main"):WaitForChild("Skills")
-CheckCooldownSkill = function(key, n)
-    if tick() - lastCheckSkill <= 0.2 then return false end
-    lastCheckSkill = tick()
+CheckCooldownSkill = function (key, n) if tick() - lastCheckSkill <= 0.2 then return false end lastCheckSkill = tick()
     n = n or (function(t) return t and t.Name end)(Character:FindFirstChildOfClass("Tool"))
     local keyfr = n and MSkills:FindFirstChild(n) and MSkills[n]:FindFirstChild(key) and MSkills[n][key]
     local cd = keyfr and keyfr:FindFirstChild("Cooldown")
@@ -1318,8 +1207,7 @@ mt.__namecall = newcclosure(function(self, ...)
                     if typeof(p) == "Vector3" then
                         for i = 1, #args do
                             if typeof(args[i]) == "Vector3" then
-                                args[i] = p
-                                break
+                                args[i] = p break
                             end
                         end
                     end
@@ -1331,10 +1219,9 @@ mt.__namecall = newcclosure(function(self, ...)
     return oldNamecall(self, ...)
 end)
 
-CheckOwnerBoat = function()
-    if not workspace:FindFirstChild("Boats") or workspace.Boats:GetChildren() == 0 then return false end
+CheckOwnerBoat = function() if workspace.Boats:GetChildren() == 0 then return false end
     for _, v in next, workspace.Boats:GetChildren() do
-        if v:IsA("Model") and v:FindFirstChild("Owner") and tostring(v.Owner.Value) == LocalPlayer.Name and v:FindFirstChild("Humanoid") and v.Humanoid.Value > 0 and CheckDistance(v) <= 6000 then
+        if v:IsA("Model") and v:FindFirstChild("Owner") and tostring(v.Owner.Value) == LocalPlayer.Name and v.Humanoid.Value > 0 and CheckDistance(v) <= 6000 then
             return v
         end
     end
@@ -1342,16 +1229,15 @@ CheckOwnerBoat = function()
 end
 
 local canPress = true
-PressKeyEvent = function(k, d)
+PressKeyEvent = (function(k, d)
     if not canPress then return end
     canPress = false
     task.spawn(function()
-        VirtualInputManager:SendKeyEvent(true, k, false, game)
-        task.wait(d or 0)
+        VirtualInputManager:SendKeyEvent(true, k, false, game) task.wait(d or 0)
         VirtualInputManager:SendKeyEvent(false, k, false, game)
         canPress = true
     end)
-end
+end)
 
 function CheckSafeZone(x)
 	for _, v in workspace._WorldOrigin.SafeZones:GetChildren() do
@@ -1362,8 +1248,8 @@ function CheckSafeZone(x)
 	return false
 end
 
-local all = 0
-FarmBeli = function(stopConditionFunc, ignoreY, ignoreFistStop)
+local all = 0;
+FarmBeli = (function(stopConditionFunc, ignoreY, ignoreFistStop)
     if type(stopConditionFunc) ~= "function" then stopConditionFunc = function() return false end end
 
     local chests, c = {}, 0
@@ -1415,8 +1301,8 @@ FarmBeli = function(stopConditionFunc, ignoreY, ignoreFistStop)
                         end
 
                         if not IsDied(Character) then
-                            c = c + 1
-                            all = all + 1
+                            c += 1
+                            all += 1
 
                             if c >= getgenv().Settings["Reset After Collect Chests"] and (ignoreFistStop or not CheckTool("Fist of Darkness")) then
                                 if Character and Character:FindFirstChildWhichIsA("Humanoid") then
@@ -1441,6 +1327,178 @@ FarmBeli = function(stopConditionFunc, ignoreY, ignoreFistStop)
         if (ignoreFistStop or not CheckTool("Fist of Darkness")) and not CheckMonster("Darkbeard") and not stopConditionFunc() then
             HopServerBrowser()
         end
+    end
+end)
+
+-- ============================================================
+-- [ MINK V3 CHEST FARM - NEW PROXY TWEEN ]
+-- Uses tweenToCFrame/TweenChest from the new proxy movement system.
+-- Does not use FarmBeli's global `all`, does not reset the character,
+-- and only counts a chest after the game confirms it is no longer collectible.
+-- ============================================================
+local minkV3ChestCount = 0
+local minkV3FarmRunning = false
+
+local function IsChestCollected(chest)
+    if not chest or not chest.Parent then
+        return true
+    end
+
+    if not chest.CanTouch then
+        return true
+    end
+
+    local ok, tagged = pcall(function()
+        return CollectionService:HasTag(chest, "_ChestTagged")
+    end)
+
+    return ok and not tagged
+end
+
+local function WaitMinkChestCollected(chest, timeout)
+    local deadline = tick() + (tonumber(timeout) or 2)
+    repeat
+        if IsChestCollected(chest) then
+            return true
+        end
+        task.wait(0.08)
+    until tick() >= deadline
+
+    return IsChestCollected(chest)
+end
+
+local function FarmMinkV3Chests()
+    if minkV3FarmRunning then return end
+    minkV3FarmRunning = true
+
+    local ok, err = xpcall(function()
+        local targetChests = tonumber(getgenv().Settings["Mink V3 Chests"]) or 30
+
+        if ScanV3Titles(false)["Mink"] == true then
+            minkV3ChestCount = 0
+            cancelProxyTween()
+            SetText("Mink V3 | Completed")
+            return
+        end
+
+        if not Character or IsDied(Character) or not HumanoidRootPart then
+            cancelProxyTween()
+            return
+        end
+
+        -- A previous Fishman/boat phase can leave NeedSit=true.
+        -- Mink chest movement must always be normal character movement.
+        NeedSit = false
+        local hum = Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.Sit = false
+        end
+
+        cancelProxyTween()
+
+        local chests = {}
+        for _, chest in ipairs(CollectionService:GetTagged("_ChestTagged")) do
+            if chest
+                and chest:IsA("BasePart")
+                and chest.Parent
+                and chest.CanTouch
+                and chest.Name:find("Chest")
+            then
+                table.insert(chests, chest)
+            end
+        end
+
+        table.sort(chests, function(a, b)
+            if not HumanoidRootPart then return false end
+            return (a.Position - HumanoidRootPart.Position).Magnitude
+                < (b.Position - HumanoidRootPart.Position).Magnitude
+        end)
+
+        if #chests == 0 then
+            SetText(string.format("Mink V3 | Chests %d/%d | No chest -> Hop", minkV3ChestCount, targetChests))
+            task.wait(0.5)
+            HopServerBrowser()
+            return
+        end
+
+        for _, chest in ipairs(chests) do
+            if ScanV3Titles(false)["Mink"] == true then
+                minkV3ChestCount = 0
+                cancelProxyTween()
+                SetText("Mink V3 | Completed")
+                return
+            end
+
+            if minkV3ChestCount >= targetChests then
+                cancelProxyTween()
+                SetText(string.format("Mink V3 | Chests %d/%d | Talking Wenlocktoad", minkV3ChestCount, targetChests))
+                pcall(function() COMMF_:InvokeServer("Wenlocktoad", "3") end)
+                task.wait(1)
+                ScanV3Titles(true)
+                return
+            end
+
+            if IsDied(Character) then
+                cancelProxyTween()
+                return
+            end
+
+            if chest and chest.Parent and chest.CanTouch then
+                local distance = HumanoidRootPart and math.floor((chest.Position - HumanoidRootPart.Position).Magnitude) or -1
+                SetText(string.format("Mink V3 | Chests %d/%d | Tween %d studs", minkV3ChestCount, targetChests, distance))
+
+                local confirmed = false
+                for attempt = 1, 3 do
+                    if IsChestCollected(chest) then
+                        confirmed = true
+                        break
+                    end
+
+                    local touched = TweenChest(chest, function()
+                        return ScanV3Titles(false)["Mink"] == true
+                            or IsDied(Character)
+                            or IsChestCollected(chest)
+                    end)
+
+                    if touched then
+                        confirmed = WaitMinkChestCollected(chest, 1.5)
+                        if confirmed then break end
+                    end
+
+                    task.wait(0.15)
+                end
+
+                if confirmed and not IsDied(Character) and ScanV3Titles(false)["Mink"] ~= true then
+                    minkV3ChestCount += 1
+                    SetText(string.format("Mink V3 | Chests %d/%d | Collected", minkV3ChestCount, targetChests))
+                    task.wait(tonumber(getgenv().Settings["Skip Chest Delay"]) or 0.3)
+                end
+            end
+        end
+
+        if ScanV3Titles(false)["Mink"] == true then
+            minkV3ChestCount = 0
+            cancelProxyTween()
+            SetText("Mink V3 | Completed")
+        elseif minkV3ChestCount >= targetChests then
+            cancelProxyTween()
+            SetText(string.format("Mink V3 | Chests %d/%d | Talking Wenlocktoad", minkV3ChestCount, targetChests))
+            pcall(function() COMMF_:InvokeServer("Wenlocktoad", "3") end)
+            task.wait(1)
+            ScanV3Titles(true)
+        else
+            SetText(string.format("Mink V3 | Chests %d/%d | Hop for more", minkV3ChestCount, targetChests))
+            task.wait(0.5)
+            HopServerBrowser()
+        end
+    end, function(e)
+        return tostring(e)
+    end)
+
+    minkV3FarmRunning = false
+    if not ok then
+        warn("[Mink V3 Chest Error]:", err)
+        cancelProxyTween()
     end
 end
 
@@ -1525,7 +1583,7 @@ local function fetch20PageBatch(batchStart, rawTotals, usableTotals)
         local workerEnd = math.min(workerStart + PAGES_PER_WORKER - 1, batchEnd)
 
         if workerStart <= batchEnd then
-            pendingWorkers = pendingWorkers + 1
+            pendingWorkers += 1
             task.spawn(function()
                 for page = workerStart, workerEnd do
                     if not batchOpen then break end
@@ -1536,18 +1594,18 @@ local function fetch20PageBatch(batchStart, rawTotals, usableTotals)
                         for jobId, info in pairs(data) do
                             local count = type(info) == "table" and tonumber(info.Count) or nil
                             if count == 4 or count == 5 or count == 6 then
-                                rawTotals[count] = rawTotals[count] + 1
+                                rawTotals[count] += 1
                                 local cand = makeCandidate(jobId, info)
                                 if cand then
                                     batch[count][#batch[count] + 1] = cand
-                                    usableTotals[count] = usableTotals[count] + 1
+                                    usableTotals[count] += 1
                                 end
                             end
                         end
                     end
                     task.wait()
                 end
-                pendingWorkers = pendingWorkers - 1
+                pendingWorkers -= 1
             end)
         end
     end
@@ -1605,6 +1663,29 @@ end
 local STANDARD_RACE_ORDER = { "Human", "Mink", "Fishman", "Skypiea" }
 local SPECIAL_RACE_ORDER = { "Cyborg", "Ghoul" }
 local RACE_ORDER = { "Human", "Mink", "Fishman", "Skypiea", "Cyborg", "Ghoul" }
+
+local raceAlias = {
+    human = "Human",
+    mink = "Mink",
+    rabbit = "Mink",
+    fishman = "Fishman",
+    shark = "Fishman",
+    skypiea = "Skypiea",
+    angel = "Skypiea",
+    ghoul = "Ghoul",
+    cyborg = "Cyborg",
+    draco = "Draco",
+}
+
+local function NormalizeRaceName(name)
+    local s = tostring(name or ""):lower():gsub("%s+", "")
+    return raceAlias[s] or tostring(name or "")
+end
+
+local function GetCurrentRace()
+    local raceVal = LocalPlayer.Data and LocalPlayer.Data:FindFirstChild("Race")
+    return NormalizeRaceName(raceVal and raceVal.Value or "")
+end
 
 local function GetFragments()
     local fragVal = LocalPlayer.Data and LocalPlayer.Data:FindFirstChild("Fragments")
@@ -1798,6 +1879,7 @@ end)
 
 -- ============================================================
 -- [ HUMAN V2 PLAYER SCRIPT LOOP ]
+-- Tự động chạy playerv3.lua khi là Human V2 chưa đạt Full Power
 -- ============================================================
 local PLAYER_V3_URL = "https://raw.githubusercontent.com/longvu26092007-eng/hellobeo/refs/heads/main/playerv3.lua"
 local PLAYER_V3_FIRST_DELAY = 30
@@ -1834,10 +1916,333 @@ local function CountAliveHumanBosses()
     for _, name in ipairs({"Jeremy", "Orbitus", "Diamond"}) do
         local m = CheckMonster(name)
         if m and not IsDied(m) then
-            count = count + 1
+            count += 1
         end
     end
     return count
+end
+
+
+-- ============================================================
+-- [ FISHMAN / SHARK V3 HELPERS - PROXY TWEEN COMPATIBLE ]
+-- Boat movement is handled separately from character Tween().
+-- Character/Sea Beast movement continues to use the new proxy tween system.
+-- ============================================================
+local SHARK_V3_BOAT_TARGET = CFrame.new(-67, 5.5647872686386108, 4380)
+local SHARK_V3_WAIT_TIMEOUT = 60
+local sharkV3WaitStarted = 0
+local sharkV3LastBoatMove = 0
+
+local function SharkV3GetPlayerBoat()
+    local boats = workspace:FindFirstChild("Boats")
+    if not boats then return nil end
+
+    for _, boat in ipairs(boats:GetChildren()) do
+        if boat:IsA("Model") then
+            local owner = boat:FindFirstChild("Owner")
+            local health = boat:FindFirstChild("Humanoid")
+            local hp = health and tonumber(health.Value) or 0
+            if owner and tostring(owner.Value) == LocalPlayer.Name and hp > 0 then
+                return boat
+            end
+        end
+    end
+
+    return nil
+end
+
+local function SharkV3GetPivot(obj)
+    if not obj then return nil end
+    if typeof(obj) == "CFrame" then return obj end
+    if typeof(obj) == "Vector3" then return CFrame.new(obj) end
+    if typeof(obj) ~= "Instance" then return nil end
+    if obj:IsA("BasePart") then return obj.CFrame end
+
+    if obj:IsA("Model") then
+        local ok, pivot = pcall(function()
+            return obj:GetPivot()
+        end)
+        if ok and typeof(pivot) == "CFrame" then
+            return pivot
+        end
+
+        local root = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+        return root and root.CFrame or nil
+    end
+
+    return nil
+end
+
+local function SharkV3GetSeaBeast()
+    local seaBeasts = workspace:FindFirstChild("SeaBeasts")
+    if not seaBeasts then return nil end
+
+    local nearest = nil
+    local nearestDistance = math.huge
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+    for _, seaBeast in ipairs(seaBeasts:GetChildren()) do
+        local health = seaBeast:FindFirstChild("Health")
+        local hp = health and tonumber(health.Value) or 0
+        local pivot = hp > 0 and SharkV3GetPivot(seaBeast) or nil
+        if pivot then
+            local distance = root and (root.Position - pivot.Position).Magnitude or 0
+            if distance < nearestDistance then
+                nearest = seaBeast
+                nearestDistance = distance
+            end
+        end
+    end
+
+    return nearest
+end
+
+local function SharkV3GetSeaMob()
+    local names = {"Shark", "Piranha", "Fish Crew Member"}
+    local enemies = workspace:FindFirstChild("Enemies")
+
+    for _, name in ipairs(names) do
+        local mob = enemies and enemies:FindFirstChild(name)
+        if mob and not IsDied(mob) then
+            return mob
+        end
+    end
+
+    for _, name in ipairs(names) do
+        local mob = ReplicatedStorage:FindFirstChild(name)
+        if mob then
+            local hum = mob:FindFirstChildWhichIsA("Humanoid")
+            if hum and hum.Health > 0 then
+                return mob
+            end
+        end
+    end
+
+    return nil
+end
+
+local function SharkV3SendKey(key, hold)
+    local keyCode = typeof(key) == "EnumItem" and key or Enum.KeyCode[tostring(key)]
+    if not keyCode then return end
+    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+    task.wait(hold or 0.06)
+    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+end
+
+local function SharkV3ResetMovement()
+    NeedSit = false
+    SetAimbotTarget(false)
+    cancelProxyTween()
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.Sit = false
+    end
+end
+
+local function SharkV3SeatPlayer(boat)
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local seat = boat and boat:FindFirstChild("VehicleSeat", true)
+    if not (char and hum and root and seat and seat:IsA("BasePart") and hum.Health > 0) then
+        return false
+    end
+
+    if seat:IsA("VehicleSeat") and seat.Occupant == hum then
+        NeedSit = true
+        return true
+    end
+
+    NeedSit = false
+    hum.Sit = false
+    local moved = tweenToCFrame(seat.CFrame * CFrame.new(0, 2, 0), 6, function()
+        return not boat.Parent or hum.Health <= 0
+    end)
+
+    if moved or (root.Position - seat.Position).Magnitude <= 8 then
+        pcall(function()
+            seat:Sit(hum)
+        end)
+        task.wait(0.35)
+    end
+
+    local seated = hum.Sit or (seat:IsA("VehicleSeat") and seat.Occupant == hum)
+    NeedSit = seated
+    return seated
+end
+
+local function SharkV3MoveBoatToSea(boat)
+    local seat = boat and boat:FindFirstChild("VehicleSeat", true)
+    if not (boat and boat.Parent and seat and seat:IsA("BasePart")) then
+        return false
+    end
+
+    local distance = (seat.Position - SHARK_V3_BOAT_TARGET.Position).Magnitude
+    if distance <= 450 then
+        return true
+    end
+
+    if tick() - sharkV3LastBoatMove < 1 then
+        return false
+    end
+    sharkV3LastBoatMove = tick()
+
+    SetText(string.format("Shark V3 | Moving boat to sea | %dm", math.floor(distance)))
+
+    local ok = pcall(function()
+        local pivot = boat:GetPivot()
+        local delta = SHARK_V3_BOAT_TARGET * seat.CFrame:Inverse()
+        boat:PivotTo(delta * pivot)
+    end)
+
+    if not ok then
+        pcall(function()
+            seat.CFrame = SHARK_V3_BOAT_TARGET
+        end)
+    end
+
+    task.wait(0.35)
+    return boat.Parent and (seat.Position - SHARK_V3_BOAT_TARGET.Position).Magnitude <= 650
+end
+
+local function SharkV3FightSeaBeast(seaBeast)
+    if not seaBeast then return false end
+
+    SharkV3ResetMovement()
+    sharkV3WaitStarted = 0
+
+    local started = tick()
+    while seaBeast and seaBeast.Parent and not IsDied(Character) do
+        local health = seaBeast:FindFirstChild("Health")
+        local hp = health and tonumber(health.Value) or 0
+        if hp <= 0 then break end
+        if ScanV3Titles(false)["Fishman"] == true then break end
+        if tick() - started > 180 then break end
+
+        local pivot = SharkV3GetPivot(seaBeast)
+        if not pivot then break end
+
+        SetText("Shark V3 | Killing Sea Beast | HP: " .. tostring(math.floor(hp)))
+
+        local height = pivot.Position.Y >= -179 and 300 or 900
+        local attackCF = CFrame.new(pivot.Position + Vector3.new(0, height, 0))
+        SetAimbotTarget(pivot.Position)
+
+        tweenToCFrame(attackCF, 45, function()
+            local h = seaBeast and seaBeast:FindFirstChild("Health")
+            return not seaBeast.Parent or not h or tonumber(h.Value) <= 0 or IsDied(Character)
+        end)
+
+        if IsDied(Character) then break end
+
+        EquipWeapon("Melee")
+        for _, key in ipairs({"Z", "X", "C"}) do
+            if not seaBeast.Parent then break end
+            local h = seaBeast:FindFirstChild("Health")
+            if not h or tonumber(h.Value) <= 0 then break end
+            SharkV3SendKey(key, 0.06)
+            task.wait(0.08)
+        end
+
+        task.wait(0.15)
+    end
+
+    SetAimbotTarget(false)
+    cancelProxyTween()
+    NeedSit = false
+
+    local health = seaBeast and seaBeast:FindFirstChild("Health")
+    local killed = not seaBeast or not seaBeast.Parent or not health or tonumber(health.Value) <= 0
+    if killed then
+        SetText("Shark V3 | Sea Beast defeated | Completing quest")
+        pcall(function()
+            COMMF_:InvokeServer("Wenlocktoad", "3")
+        end)
+        task.wait(0.8)
+        ScanV3Titles(true)
+    end
+
+    return killed
+end
+
+local function RunSharkV3Quest()
+    local seaMob = SharkV3GetSeaMob()
+    if seaMob then
+        SharkV3ResetMovement()
+        sharkV3WaitStarted = 0
+        SetText("Shark V3 | Killing " .. tostring(seaMob.Name))
+
+        if seaMob:IsDescendantOf(workspace.Enemies) then
+            KillMonster(seaMob.Name)
+        else
+            local pivot = SharkV3GetPivot(seaMob)
+            if pivot then
+                tweenToCFrame(pivot, 20, function()
+                    local hum = seaMob:FindFirstChildWhichIsA("Humanoid")
+                    return not seaMob.Parent or not hum or hum.Health <= 0 or IsDied(Character)
+                end)
+            end
+        end
+        return
+    end
+
+    local seaBeast = SharkV3GetSeaBeast()
+    if seaBeast then
+        SharkV3FightSeaBeast(seaBeast)
+        return
+    end
+
+    local boat = SharkV3GetPlayerBoat()
+    if not boat then
+        SharkV3ResetMovement()
+        sharkV3WaitStarted = 0
+
+        local buyBoatPos = CFrame.new(-14, 10, 2955)
+        SetText("Shark V3 | Buying PirateBrigade boat")
+        tweenToCFrame(buyBoatPos, 10)
+
+        if HumanoidRootPart and (HumanoidRootPart.Position - buyBoatPos.Position).Magnitude <= 15 then
+            pcall(function()
+                COMMF_:InvokeServer("BuyBoat", LocalPlayer.Team and LocalPlayer.Team.Name == "Marine" and "PirateSloop" or "PirateBrigade")
+            end)
+            task.wait(0.8)
+        end
+        return
+    end
+
+    local seat = boat:FindFirstChild("VehicleSeat", true)
+    if not seat then
+        SharkV3ResetMovement()
+        SetText("Shark V3 | Boat missing VehicleSeat")
+        return
+    end
+
+    if not SharkV3SeatPlayer(boat) then
+        SetText("Shark V3 | Getting into boat")
+        return
+    end
+
+    if not SharkV3MoveBoatToSea(boat) then
+        return
+    end
+
+    NeedSit = true
+    if sharkV3WaitStarted == 0 then
+        sharkV3WaitStarted = tick()
+    end
+
+    local waited = tick() - sharkV3WaitStarted
+    SetText(string.format("Shark V3 | Waiting Sea Beast | %ds", math.floor(waited)))
+
+    if waited >= SHARK_V3_WAIT_TIMEOUT then
+        SharkV3ResetMovement()
+        sharkV3WaitStarted = 0
+        SetText("Shark V3 | No Sea Beast -> Hopping server")
+        task.wait(1)
+        HopServerBrowser()
+    end
 end
 
 -- ============================================================
@@ -1846,9 +2251,6 @@ end
 task.spawn(function()
     ScanV3Titles(true)
     task.wait(1)
-
-    -- Biến lưu thời điểm kiểm tra bật PvP cho Angel V3 (debounce 15 giây)
-    local lastAngelPvpEnable = 0
 
     while task.wait(0.5) do
         xpcall(function()
@@ -1983,7 +2385,7 @@ task.spawn(function()
                                 if CurrentRace == "Human" then
                                     local aliveBosses = CountAliveHumanBosses()
                                     local killedCount = 0
-                                    for _ in pairs(HumanBossKills) do killedCount = killedCount + 1 end
+                                    for _ in pairs(HumanBossKills) do killedCount += 1 end
 
                                     if aliveBosses >= 2 or killedCount >= 2 then
                                         HumanServerLocked = true
@@ -2004,7 +2406,7 @@ task.spawn(function()
                                                         
                                                         HumanBossKills[v.Name] = true
                                                         killedCount = 0
-                                                        for _ in pairs(HumanBossKills) do killedCount = killedCount + 1 end
+                                                        for _ in pairs(HumanBossKills) do killedCount += 1 end
                                                         if killedCount >= 2 then
                                                             HumanServerLocked = true
                                                         end
@@ -2022,147 +2424,42 @@ task.spawn(function()
                                         HopServerBrowser()
                                     end
                                 elseif CurrentRace == "Mink" then
-                                    FarmBeli(function() return (ScanV3Titles(false)["Mink"] == true) end, nil, true)
+                                    FarmMinkV3Chests()
                                 elseif CurrentRace == "Fishman" then
-                                    -- ============================================================
-                                    -- [ BẢN FISHMAN V3 (CHỈ MELEE + SPAM CHIÊU CHO SHARK & SEA BEAST) ]
-                                    -- ============================================================
-                                    local function SharkV3GetPlayerBoat()
-                                        for _, boat in next, workspace.Boats:GetChildren() do
-                                            if boat:IsA("Model") then
-                                                local owner = boat:FindFirstChild("Owner")
-                                                local hd = boat:FindFirstChild("Humanoid")
-                                                local hp = hd and tonumber(hd.Value) or 0
-                                                if owner and tostring(owner.Value) == LocalPlayer.Name and hp > 0 then
-                                                    return boat
-                                                end
-                                            end
-                                        end
-                                        return CheckOwnerBoat()
-                                    end
-
-                                    local function SharkV3GetSeaBeast()
-                                        if not workspace:FindFirstChild("SeaBeasts") then return nil end
-                                        for _, seaBeast in next, workspace.SeaBeasts:GetChildren() do
-                                            local health = seaBeast:FindFirstChild("Health")
-                                            local hp = health and tonumber(health.Value) or 0
-                                            if hp > 30000 then
-                                                return seaBeast
-                                            end
-                                        end
-                                        return nil
-                                    end
-
-                                    local function SharkV3GetSeaMob()
-                                        return workspace.Enemies:FindFirstChild("Shark")
-                                            or workspace.Enemies:FindFirstChild("Piranha")
-                                            or ReplicatedStorage:FindFirstChild("Shark")
-                                            or ReplicatedStorage:FindFirstChild("Piranha")
-                                    end
-
-                                    local function SharkV3SendKey(key, hold)
-                                        local keyCode = Enum.KeyCode[tostring(key)] or key
-                                        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-                                        task.wait(hold or 0.05)
-                                        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-                                    end
-
-                                    local function SharkV3GetPivot(model)
-                                        if not model then return nil end
-                                        local ok, pivot = pcall(function()
-                                            return model.WorldPivot
-                                        end)
-                                        if ok and typeof(pivot) == "CFrame" then
-                                            return pivot
-                                        end
-                                        ok, pivot = pcall(function()
-                                            return model:GetPivot()
-                                        end)
-                                        if ok and typeof(pivot) == "CFrame" then
-                                            return pivot
-                                        end
-                                        local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
-                                        return hrp and hrp.CFrame or nil
-                                    end
-
-                                    local seaBeast = SharkV3GetSeaBeast()
-                                    if not seaBeast then
-                                        local boat = SharkV3GetPlayerBoat()
-                                        local sharkMob = SharkV3GetSeaMob()
-
-                                        if sharkMob then
-                                            SetText("Shark V3 | Killing " .. tostring(sharkMob.Name))
-                                            local targetHrp = sharkMob:FindFirstChild("HumanoidRootPart") or sharkMob:FindFirstChildWhichIsA("BasePart")
-                                            if targetHrp then
-                                                Tween(targetHrp.CFrame * CFrame.new(0, 15, 0))
-                                                EquipWeapon("Melee")
-                                                FastAttack()
-                                                SetAimbotTarget(targetHrp)
-                                                for _, key in ipairs({"Z", "X", "C", "V"}) do
-                                                    if CheckCooldownSkill(key) then
-                                                        SharkV3SendKey(key, 0.05)
+                                    local TargetMelee = getgenv().Settings["Focus Melee"]
+                                    if CheckTool(TargetMelee) then
+                                        RunSharkV3Quest()
+                                    else
+                                        SharkV3ResetMovement()
+                                        local npcName = MeleeData[TargetMelee] or TargetMelee
+                                        local x, d = GetCFrameByNPC(npcName)
+                                        if x then
+                                            if d < 50 then
+                                                if TargetMelee == "Dragon Claw" then
+                                                    COMMF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
+                                                elseif TargetMelee == "Sharkman Karate" then
+                                                    local hasSharkman = CheckTool("Sharkman Karate") or CheckInventory("Sharkman Karate")
+                                                    if not hasSharkman and COMMF_:InvokeServer("BuySharkmanKarate", true) == 1 then
+                                                        local pos = CFrame.new(-2599.621826171875, 238.19833374023438, -10315.998046875)
+                                                        repeat task.wait() Tween(pos) until CheckDistance(pos) <= 30
+                                                        COMMF_:InvokeServer("BuySharkmanKarate")
                                                     end
+                                                else
+                                                    COMMF_:InvokeServer("Buy"..TargetMelee:gsub("%s+", ""))
                                                 end
-                                            end
-                                            return
-                                        end
-
-                                        if not boat then
-                                            local buyBoatPos = CFrame.new(-14, 10, 2955)
-                                            SetText("Shark V3 | Buying PirateBrigade boat")
-                                            Tween(buyBoatPos)
-                                            if CheckDistance(buyBoatPos) < 10 then
-                                                COMMF_:InvokeServer("BuyBoat", "PirateBrigade")
-                                            end
-                                        elseif boat:FindFirstChild("VehicleSeat") then
-                                            local targetBoatCFrame = CFrame.new(-67, 5.5647872686386108, 4205 + math.random(1, 400))
-                                            if CheckDistance(boat.VehicleSeat.CFrame, targetBoatCFrame) > 800 then
-                                                SetText("Shark V3 | Move boat to sea")
-                                                boat.VehicleSeat.CFrame = targetBoatCFrame
-                                            elseif CheckDistance(boat.VehicleSeat.CFrame) > 5 then
-                                                SetText("Shark V3 | Tween to boat seat")
-                                                Tween(boat.VehicleSeat.CFrame + Vector3.new(0, math.random(-1, 2), 0))
                                             else
-                                                SetText("Shark V3 | Waiting for Sea Beast")
+                                                SetText("Travel To ".. npcName.. " NPC")
+                                                Tween(x)
                                             end
                                         else
-                                            SetText("Shark V3 | Boat missing VehicleSeat")
+                                            SetText("Can't find ".. npcName.. " NPC")
+                                            Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+                                            LocalPlayer.CharacterAdded:Wait()
+                                            local needSea = GetMeleeTargetSea(TargetMelee)
+                                            if needSea == 2 then COMMF_:InvokeServer("TravelDressrosa")
+                                            elseif needSea == 3 then COMMF_:InvokeServer("TravelZou") end
                                         end
-                                    else
-                                        if not CheckTool("Sharkman Karate") and not CheckInventory("Sharkman Karate") then
-                                            SetText("Shark V3 | Buy Sharkman Karate")
-                                            COMMF_:InvokeServer("BuySharkmanKarate")
-                                        end
-
-                                        repeat
-                                            task.wait()
-                                            local pivot = SharkV3GetPivot(seaBeast)
-                                            if not pivot then break end
-                                            local health = seaBeast:FindFirstChild("Health")
-                                            local hpText = health and tostring(math.floor(tonumber(health.Value) or 0)) or "nil"
-                                            SetText("Shark V3 | Killing Sea Beast | HP: " .. hpText)
-
-                                            if pivot.Position.Y >= -179 then
-                                                local lockCFrame = pivot * CFrame.new(0, 300, 0)
-                                                Tween(lockCFrame)
-                                                SetAimbotTarget(lockCFrame)
-                                                EquipWeapon("Melee")
-                                                for _, key in ipairs({"Z", "X", "C", "V"}) do
-                                                    if CheckCooldownSkill(key) then
-                                                        SharkV3SendKey(key, 0.05)
-                                                    end
-                                                end
-                                                FastAttack()
-                                            else
-                                                Tween(pivot * CFrame.new(0, 900, 0))
-                                            end
-                                        until not seaBeast or not seaBeast.Parent or not seaBeast:FindFirstChild("Health") or seaBeast.Health.Value <= 0 or IsDied(Character)
-
-                                        SetAimbotTarget(false)
-                                        COMMF_:InvokeServer("Wenlocktoad", "3")
-                                        SetText("Shark V3 | Done Sea Beast | Talked Wenlocktoad")
-                                        task.wait(1)
-                                    end
+                                     end
                                 elseif CurrentRace == "Skypiea" then
                                     local x = nil
                                     for _, v in next, Players:GetPlayers() do
@@ -2173,34 +2470,14 @@ task.spawn(function()
                                         end
                                     end
                                     
-                                    -- Kiểm tra và tự động bật PvP mỗi 15 giây chuẩn debounce
-                                    if tick() - lastAngelPvpEnable >= 15 then
-                                        lastAngelPvpEnable = tick()
-                                        pcall(function()
-                                            local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-                                            local pvpBtn = playerGui and playerGui:FindFirstChild("Main") and playerGui.Main:FindFirstChild("PvpDisabled")
-                                            if pvpBtn and pvpBtn.Visible then
-                                                COMMF_:InvokeServer("EnablePvp")
-                                            end
-                                        end)
-                                    end
-
+                                    local lastPvpEnable = 0
                                     if x then
                                         repeat task.wait()
                                             SetText("Killing Skypiea Player | Health: ".. math.floor(x.Humanoid.Health / x.Humanoid.MaxHealth * 100).. "%")
-                                            
-                                            -- Kiểm tra lại PvP nếu vẫn bị tắt sau 15 giây trong lúc đánh
-                                            if tick() - lastAngelPvpEnable >= 15 then
-                                                lastAngelPvpEnable = tick()
-                                                pcall(function()
-                                                    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-                                                    local pvpBtn = playerGui and playerGui:FindFirstChild("Main") and playerGui.Main:FindFirstChild("PvpDisabled")
-                                                    if pvpBtn and pvpBtn.Visible then
-                                                        COMMF_:InvokeServer("EnablePvp")
-                                                    end
-                                                end)
+                                            if LocalPlayer.PlayerGui.Main.PvpDisabled.Visible and (tick() - lastPvpEnable > 3) then
+                                                lastPvpEnable = tick()
+                                                pcall(function() COMMF_:InvokeServer("EnablePvp") end)
                                             end
-
                                             Tween(x.HumanoidRootPart.CFrame * CFrame.new(0, 20, 0))
                                             if (x.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude < 100 then
                                                 FastAttack() SetAimbotTarget(x.HumanoidRootPart)
@@ -2213,6 +2490,7 @@ task.spawn(function()
                                         HopServerBrowser()
                                     end
                                 elseif CurrentRace == "Ghoul" then
+                                    -- Nhiệm vụ Ghoul V3: Tiêu diệt 5 người chơi
                                     local targetPlr = nil
                                     for _, v in next, Players:GetPlayers() do
                                         if v.Name ~= LocalPlayer.Name and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
