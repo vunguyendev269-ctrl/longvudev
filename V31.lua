@@ -1929,8 +1929,6 @@ end
 -- Character/Sea Beast movement continues to use the new proxy tween system.
 -- ============================================================
 local SHARK_V3_BOAT_TARGET = CFrame.new(-67, 5.5647872686386108, 4380)
-local SHARK_V3_WAIT_TIMEOUT = 60
-local sharkV3WaitStarted = 0
 local sharkV3LastBoatMove = 0
 
 local function SharkV3GetPlayerBoat()
@@ -2111,15 +2109,12 @@ local function SharkV3FightSeaBeast(seaBeast)
     if not seaBeast then return false end
 
     SharkV3ResetMovement()
-    sharkV3WaitStarted = 0
 
-    local started = tick()
     while seaBeast and seaBeast.Parent and not IsDied(Character) do
         local health = seaBeast:FindFirstChild("Health")
         local hp = health and tonumber(health.Value) or 0
         if hp <= 0 then break end
         if ScanV3Titles(false)["Fishman"] == true then break end
-        if tick() - started > 180 then break end
 
         local pivot = SharkV3GetPivot(seaBeast)
         if not pivot then break end
@@ -2171,8 +2166,7 @@ local function RunSharkV3Quest()
     local seaMob = SharkV3GetSeaMob()
     if seaMob then
         SharkV3ResetMovement()
-        sharkV3WaitStarted = 0
-        SetText("Shark V3 | Killing " .. tostring(seaMob.Name))
+            SetText("Shark V3 | Killing " .. tostring(seaMob.Name))
 
         if seaMob:IsDescendantOf(workspace.Enemies) then
             KillMonster(seaMob.Name)
@@ -2197,8 +2191,7 @@ local function RunSharkV3Quest()
     local boat = SharkV3GetPlayerBoat()
     if not boat then
         SharkV3ResetMovement()
-        sharkV3WaitStarted = 0
-
+    
         local buyBoatPos = CFrame.new(-14, 10, 2955)
         SetText("Shark V3 | Buying PirateBrigade boat")
         tweenToCFrame(buyBoatPos, 10)
@@ -2228,21 +2221,11 @@ local function RunSharkV3Quest()
         return
     end
 
+    -- Keep the boat parked in the Sea Beast spawn area indefinitely.
+    -- Do not hop because of elapsed waiting time; Sea Beast spawning may
+    -- require the boat to remain at this location for a long time.
     NeedSit = true
-    if sharkV3WaitStarted == 0 then
-        sharkV3WaitStarted = tick()
-    end
-
-    local waited = tick() - sharkV3WaitStarted
-    SetText(string.format("Shark V3 | Waiting Sea Beast | %ds", math.floor(waited)))
-
-    if waited >= SHARK_V3_WAIT_TIMEOUT then
-        SharkV3ResetMovement()
-        sharkV3WaitStarted = 0
-        SetText("Shark V3 | No Sea Beast -> Hopping server")
-        task.wait(1)
-        HopServerBrowser()
-    end
+    SetText("Shark V3 | Waiting Sea Beast")
 end
 
 -- ============================================================
