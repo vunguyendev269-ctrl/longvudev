@@ -95,7 +95,8 @@ COMMF_ = ReplicatedStorage:WaitForChild("Remotes") and ReplicatedStorage.Remotes
 ServerBrowser = ReplicatedStorage:WaitForChild("__ServerBrowser")
 LocalPlayer = Players.LocalPlayer
 LocalPlayer.CharacterAdded:Connect(function(v)
-    Character = v Humanoid = v:WaitForChild("Humanoid")
+    Character = v
+    Humanoid = v:WaitForChild("Humanoid")
     HumanoidRootPart = v:WaitForChild("HumanoidRootPart")
 end)
 if LocalPlayer.Character then
@@ -104,7 +105,10 @@ if LocalPlayer.Character then
     HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart") or Character:WaitForChild("HumanoidRootPart")
 end
 
-StarterGui:SetCore("SendNotification", {Title = "Executed", Text = "Loading… Please wait", Subtext = "VuNguyen KaitunV3 Premium", Duration = 5})
+pcall(function()
+    StarterGui:SetCore("SendNotification", {Title = "Executed", Text = "Loading… Please wait", Subtext = "VuNguyen KaitunV3 Premium", Duration = 5})
+end)
+
 if not game:IsLoaded() or workspace.DistributedGameTime <= 10 then
     local WFGTL = COREGUI:FindFirstChild("WFGTL") or Instance.new("Hint", COREGUI)
     WFGTL.Text = "Just a moment... Waiting while the game loads - This won't take long!"
@@ -354,7 +358,7 @@ do
     StatusLabel.BackgroundTransparency = 1
     StatusLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
     StatusLabel.Size = UDim2.new(1, -20, 1, -10)
-    StatusLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+    StatusLabel.Font = Enum.Font.GothamBold
     StatusLabel.Text = "Status: Starting..."
     StatusLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
     StatusLabel.TextSize = 17
@@ -408,7 +412,7 @@ do
     Top_1.Name = "Top"
     Top_1.Parent = HeaderFrame
     Top_1.Size = UDim2.new(1, 0, 1, 0)
-    Top_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Heavy)
+    Top_1.Font = Enum.Font.GothamBold
     Top_1.Text = 'VuNguyen KaitunV3  <font color="#FFD700">[ PREMIUM ]</font>'
     Top_1.TextColor3 = Color3.fromRGB(255, 80, 80)
     Top_1.TextSize = 22
@@ -447,7 +451,7 @@ do
     UnderStats_1.Parent = StatsCard
     UnderStats_1.Position = UDim2.new(0, 16, 0, 8)
     UnderStats_1.Size = UDim2.new(1, -32, 0, 18)
-    UnderStats_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+    UnderStats_1.Font = Enum.Font.GothamBold
     UnderStats_1.Text = "ACCOUNT OVERVIEW"
     UnderStats_1.TextColor3 = Color3.fromRGB(255, 110, 110)
     UnderStats_1.TextSize = 13
@@ -459,7 +463,7 @@ do
     CharacterLabel.Parent = StatsCard
     CharacterLabel.Position = UDim2.new(0, 16, 0, 32)
     CharacterLabel.Size = UDim2.new(0.48, 0, 0, 20)
-    CharacterLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    CharacterLabel.Font = Enum.Font.GothamSemibold
     CharacterLabel.Text = "Character: N/A"
     CharacterLabel.TextColor3 = Color3.fromRGB(230, 230, 235)
     CharacterLabel.TextSize = 14
@@ -472,7 +476,7 @@ do
     RaceLabel_1.Parent = StatsCard
     RaceLabel_1.Position = UDim2.new(0.52, 0, 0, 32)
     RaceLabel_1.Size = UDim2.new(0.46, 0, 0, 20)
-    RaceLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    RaceLabel_1.Font = Enum.Font.GothamSemibold
     RaceLabel_1.Text = "Current Race: N/A"
     RaceLabel_1.TextColor3 = Color3.fromRGB(230, 230, 235)
     RaceLabel_1.TextSize = 14
@@ -485,7 +489,7 @@ do
     BeliLabel_1.Parent = StatsCard
     BeliLabel_1.Position = UDim2.new(0, 16, 0, 58)
     BeliLabel_1.Size = UDim2.new(0.48, 0, 0, 20)
-    BeliLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    BeliLabel_1.Font = Enum.Font.GothamSemibold
     BeliLabel_1.Text = "Beli: 0"
     BeliLabel_1.TextColor3 = Color3.fromRGB(100, 255, 140)
     BeliLabel_1.TextSize = 14
@@ -497,7 +501,7 @@ do
     FragLabel_1.Parent = StatsCard
     FragLabel_1.Position = UDim2.new(0.52, 0, 0, 58)
     FragLabel_1.Size = UDim2.new(0.46, 0, 0, 20)
-    FragLabel_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    FragLabel_1.Font = Enum.Font.GothamSemibold
     FragLabel_1.Text = "Fragments: 0"
     FragLabel_1.TextColor3 = Color3.fromRGB(175, 150, 255)
     FragLabel_1.TextSize = 14
@@ -509,7 +513,7 @@ do
     GoalLabel.Parent = StatsCard
     GoalLabel.Position = UDim2.new(0, 16, 0, 84)
     GoalLabel.Size = UDim2.new(1, -32, 0, 18)
-    GoalLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+    GoalLabel.Font = Enum.Font.Gotham
     GoalLabel.Text = "Server: -- | Job: --"
     GoalLabel.TextColor3 = Color3.fromRGB(150, 155, 175)
     GoalLabel.TextSize = 12
@@ -521,7 +525,7 @@ do
     UnderRace_1.Parent = Main_1
     UnderRace_1.Position = UDim2.new(0.06, 0, 0, 180)
     UnderRace_1.Size = UDim2.new(0.88, 0, 0, 22)
-    UnderRace_1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+    UnderRace_1.Font = Enum.Font.GothamBold
     UnderRace_1.Text = "RACE V3 PROGRESSION (CONFIG SYNCED)"
     UnderRace_1.TextColor3 = Color3.fromRGB(255, 110, 110)
     UnderRace_1.TextSize = 13
@@ -576,7 +580,7 @@ do
         titleLabel.BackgroundTransparency = 1
         titleLabel.Position = UDim2.new(0, 10, 0, 4)
         titleLabel.Size = UDim2.new(0.6, 0, 0, 18)
-        titleLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+        titleLabel.Font = Enum.Font.GothamBold
         titleLabel.Text = info.v3
         titleLabel.TextColor3 = info.color
         titleLabel.TextSize = 14
@@ -588,7 +592,7 @@ do
         stateLabel.BackgroundTransparency = 1
         stateLabel.Position = UDim2.new(0, 10, 0, 22)
         stateLabel.Size = UDim2.new(0.6, 0, 0, 16)
-        stateLabel.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium)
+        stateLabel.Font = Enum.Font.GothamSemibold
         stateLabel.Text = "🔴 MISSING"
         stateLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
         stateLabel.TextSize = 12
@@ -601,7 +605,7 @@ do
         cfgBadge.Position = UDim2.new(1, -10, 0.5, 0)
         cfgBadge.Size = UDim2.new(0, 52, 0, 22)
         cfgBadge.BackgroundColor3 = Color3.fromRGB(30, 33, 46)
-        cfgBadge.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
+        cfgBadge.Font = Enum.Font.GothamBold
         cfgBadge.Text = "OFF"
         cfgBadge.TextColor3 = Color3.fromRGB(150, 150, 160)
         cfgBadge.TextSize = 11
@@ -688,7 +692,10 @@ end
 
 pcall(function() LocalPlayer.PlayerGui:FindFirstChild("Blank"):Destroy() end)
 local BlankScreen = LocalPlayer.PlayerGui:FindFirstChild("Blank") or Instance.new("ScreenGui", LocalPlayer.PlayerGui)
-BlankScreen.Name = "Blank" BlankScreen.ResetOnSpawn = false BlankScreen.DisplayOrder = -math.huge BlankScreen.IgnoreGuiInset = true
+BlankScreen.Name = "Blank"
+BlankScreen.ResetOnSpawn = false
+BlankScreen.DisplayOrder = -math.huge
+BlankScreen.IgnoreGuiInset = true
 
 local Black = BlankScreen:FindFirstChild("Black Screen") or Instance.new("Frame", BlankScreen)
 Black.Name = "Black Screen"
@@ -728,11 +735,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.F4 then
         Black.Visible = not Black.Visible
         RunService:Set3dRenderingEnabled(not Black.Visible)
-        StarterGui:SetCore("SendNotification", {
-            Title = "Black Screen",
-            Text = Black.Visible and "Đã BẬT màn hình đen (Tắt Render 3D)" or "Đã TẮT màn hình đen (Bật Render 3D)",
-            Duration = 2
-        })
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = "Black Screen",
+                Text = Black.Visible and "Đã BẬT màn hình đen (Tắt Render 3D)" or "Đã TẮT màn hình đen (Bật Render 3D)",
+                Duration = 2
+            })
+        end)
     end
 end)
 
@@ -753,30 +762,51 @@ leftButton.MouseButton1Click:Connect(function()
     end
 end)
 
-function CheckSea(v: number) return v == tonumber(workspace:GetAttribute("MAP"):match("%d+")) end
+function CheckSea(v)
+    return v == tonumber(workspace:GetAttribute("MAP"):match("%d+"))
+end
+
 local remoteAttack, idremote
 local seed = ReplicatedStorage.Modules.Net.seed:InvokeServer()
-task.spawn((function() for _, v in next, ({ReplicatedStorage.Util, ReplicatedStorage.Common, ReplicatedStorage.Remotes, ReplicatedStorage.Assets, ReplicatedStorage.FX}) do
-    for _, n in next, v:GetChildren() do if n:IsA("RemoteEvent") and n:GetAttribute("Id") then remoteAttack, idremote = n, n:GetAttribute("Id") end
-    end v.ChildAdded:Connect(function(n) if n:IsA("RemoteEvent") and n:GetAttribute("Id") then remoteAttack, idremote = n, n:GetAttribute("Id") end
-    end end) end
-end))
-CheckLocation = (function(v)return LocalPlayer:GetAttribute("CurrentLocation") == v end)
-CheckMap = (function(v) return workspace.Map:FindFirstChild(v) or false end)
-CheckTool = (function(v)
+task.spawn(function()
+    for _, v in next, ({ReplicatedStorage.Util, ReplicatedStorage.Common, ReplicatedStorage.Remotes, ReplicatedStorage.Assets, ReplicatedStorage.FX}) do
+        for _, n in next, v:GetChildren() do
+            if n:IsA("RemoteEvent") and n:GetAttribute("Id") then
+                remoteAttack, idremote = n, n:GetAttribute("Id")
+            end
+        end
+        v.ChildAdded:Connect(function(n)
+            if n:IsA("RemoteEvent") and n:GetAttribute("Id") then
+                remoteAttack, idremote = n, n:GetAttribute("Id")
+            end
+        end)
+    end
+end)
+
+CheckLocation = function(v) return LocalPlayer:GetAttribute("CurrentLocation") == v end
+CheckMap = function(v) return workspace.Map:FindFirstChild(v) or false end
+CheckTool = function(v)
     for _, x in next, {LocalPlayer.Backpack, Character} do
-    for _, v2 in next, x:GetChildren() do if v2:IsA("Tool") and (v2.Name == v or v2.Name:find(v)) then return true end
-    end end return false
-end)
-CheckMaterial = (function(x)
-    for _, v in pairs(COMMF_:InvokeServer("getInventory")) do if v.Type == "Material" then if v.Name == x then return v.Count end end
-    end return 0
-end)
-CheckInventory = (function(...)
+        for _, v2 in next, x:GetChildren() do
+            if v2:IsA("Tool") and (v2.Name == v or v2.Name:find(v)) then return true end
+        end
+    end
+    return false
+end
+CheckMaterial = function(x)
     for _, v in pairs(COMMF_:InvokeServer("getInventory")) do
-    for _, n in next, {...} do if v.Name == n then return true end end
-    end return false
-end)
+        if v.Type == "Material" and v.Name == x then return v.Count end
+    end
+    return 0
+end
+CheckInventory = function(...)
+    for _, v in pairs(COMMF_:InvokeServer("getInventory")) do
+        for _, n in next, {...} do
+            if v.Name == n then return true end
+        end
+    end
+    return false
+end
 
 IsDied = function(v)
     local ok, r = xpcall(function()
@@ -791,32 +821,40 @@ IsDied = function(v)
     return ok and r or false
 end
 
-CheckMonster = (function(...) local args = {...}
+CheckMonster = function(...)
+    local args = {...}
     local v2 = {workspace.Enemies, ReplicatedStorage}
-    for i = 1, #args do local n = args[i]
+    for i = 1, #args do
+        local n = args[i]
         local m = workspace.Enemies:FindFirstChild(n) or ReplicatedStorage:FindFirstChild(n)
         if m and m:IsA("Model") and m.Name ~= "Blank Buddy" then
-            local h = m:FindFirstChildWhichIsA("Humanoid") local r = m:FindFirstChild("HumanoidRootPart")
+            local h = m:FindFirstChildWhichIsA("Humanoid")
+            local r = m:FindFirstChild("HumanoidRootPart")
             if h and r and not IsDied(m) then return m end
         end
     end
-    for c = 1, #v2 do local container = v2[c] local ms = container:GetChildren()
-        for m = 1, #ms do local m = ms[m] local h = m:FindFirstChildWhichIsA("Humanoid")
-            local r = m:FindFirstChild("HumanoidRootPart")
-            if m:IsA("Model") and h and r and not IsDied(m) and m.Name ~= "Blank Buddy" then
-                for i = 1, #args do local n = args[i]
-                    if m.Name == n or m.Name:lower():find(n:lower()) then
-                        return m
+    for c = 1, #v2 do
+        local container = v2[c]
+        local ms = container:GetChildren()
+        for m = 1, #ms do
+            local model = ms[m]
+            local h = model:FindFirstChildWhichIsA("Humanoid")
+            local r = model:FindFirstChild("HumanoidRootPart")
+            if model:IsA("Model") and h and r and not IsDied(model) and model.Name ~= "Blank Buddy" then
+                for i = 1, #args do
+                    local n = args[i]
+                    if model.Name == n or model.Name:lower():find(n:lower()) then
+                        return model
                     end
                 end
             end
         end
     end
     return false
-end)
+end
 
 local lastEquip = tick()
-EquipWeapon = (function(v)
+EquipWeapon = function(v)
     if tick() - lastEquip <= 0.2 then return end
     lastEquip = tick()
     if not Character then return end
@@ -828,7 +866,7 @@ EquipWeapon = (function(v)
             return
         end
     end
-end)
+end
 
 function GetPosition(v)
     if not v then return nil
@@ -879,34 +917,40 @@ GetNPCMelee = function(xn)
 end
 
 local lastCallFA = tick()
-FastAttack = (function(x)
+FastAttack = function(x)
     if not HumanoidRootPart or not Character:FindFirstChildWhichIsA("Humanoid") or Character.Humanoid.Health <= 0 or not Character:FindFirstChildWhichIsA("Tool") then return end
     local FAD = 0.01
     if FAD ~= 0 and tick() - lastCallFA <= FAD then return end
     local t = {}
     for _, u in next, {workspace.Characters, workspace.Enemies} do
         for _, e in next, u:GetChildren() do
-            local h = e:FindFirstChildWhichIsA("Humanoid") local hrp = e:FindFirstChild("HumanoidRootPart")
-            if e ~= Character and (x and e.Name == x or not x) and h and hrp and not IsDied(e) and (hrp.Position - HumanoidRootPart.Position).Magnitude <= 65 then t[#t + 1] = e end
+            local h = e:FindFirstChildWhichIsA("Humanoid")
+            local hrp = e:FindFirstChild("HumanoidRootPart")
+            if e ~= Character and (x and e.Name == x or not x) and h and hrp and not IsDied(e) and (hrp.Position - HumanoidRootPart.Position).Magnitude <= 65 then
+                t[#t + 1] = e
+            end
         end
     end
     local n = ReplicatedStorage.Modules.Net
     local h = {[2] = {}}
     local last
-    for i = 1, #t do local v = t[i]
+    for i = 1, #t do
+        local v = t[i]
         local part = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
         if not h[1] then h[1] = part end
-        h[2][#h[2] + 1] = {v, part} last = v
+        h[2][#h[2] + 1] = {v, part}
+        last = v
     end
     n:FindFirstChild("RE/RegisterAttack"):FireServer()
     n:FindFirstChild("RE/RegisterHit"):FireServer(unpack(h))
-    cloneref(remoteAttack):FireServer(string.gsub("RE/RegisterHit", ".",function(c)
+    cloneref(remoteAttack):FireServer(string.gsub("RE/RegisterHit", ".", function(c)
         return string.char(bit32.bxor(string.byte(c), math.floor(workspace:GetServerTimeNow()/10%10)+1))
     end), bit32.bxor(idremote+909090, seed*2), unpack(h))
     lastCallFA = tick()
-end)
+end
 
-CheckDistance = function(a, b) b = b or Character
+CheckDistance = function(a, b)
+    b = b or Character
     local pa, pb = GetPosition(a), GetPosition(b)
     if pa and pb then return (pa - pb).Magnitude end
     return math.huge
@@ -925,7 +969,6 @@ end
 
 -- ============================================================
 -- PROXY TWEEN SYSTEM
--- (Tốc độ mặc định 160 studs/s, riêng Fishman tự động giảm còn 150 studs/s)
 -- ============================================================
 local TWEEN_SPEED = 160
 local ACTIVE_PROXY_MOVE = nil
@@ -967,7 +1010,7 @@ local function cleanupProxyMove(move)
 end
 
 local function cancelProxyTween()
-    PROXY_MOVE_SERIAL += 1
+    PROXY_MOVE_SERIAL = PROXY_MOVE_SERIAL + 1
     local move = ACTIVE_PROXY_MOVE
     ACTIVE_PROXY_MOVE = nil
     cleanupProxyMove(move)
@@ -1005,7 +1048,7 @@ local function tweenToCFrame(targetCFrame, arriveDistance, stopCondition, moveTa
         return true, distance
     end
 
-    PROXY_MOVE_SERIAL += 1
+    PROXY_MOVE_SERIAL = PROXY_MOVE_SERIAL + 1
     local moveId = PROXY_MOVE_SERIAL
 
     local proxy = Instance.new("Part")
@@ -1205,33 +1248,40 @@ local function TweenFlower(flower, flowerName)
     return false
 end
 
-KillMonster=(function(x)
+KillMonster = function(x)
     xpcall(function()
         if workspace.Enemies:FindFirstChild(x) then
-            for _,v in next,workspace.Enemies:GetChildren() do
-                local vh=v:FindFirstChildWhichIsA("Humanoid") local vhrp=v:FindFirstChild("HumanoidRootPart")
-                if vh and vhrp and v.Name==x and not IsDied(v) then
-                    local dx,dy,dz=HumanoidRootPart.Position.X-vhrp.Position.X, HumanoidRootPart.Position.Y-vhrp.Position.Y, HumanoidRootPart.Position.Z-vhrp.Position.Z
-                    local sqrMag=dx*dx+dy*dy+dz*dz
-                    if sqrMag<=4900 then
+            for _, v in next, workspace.Enemies:GetChildren() do
+                local vh = v:FindFirstChildWhichIsA("Humanoid")
+                local vhrp = v:FindFirstChild("HumanoidRootPart")
+                if vh and vhrp and v.Name == x and not IsDied(v) then
+                    local dx, dy, dz = HumanoidRootPart.Position.X - vhrp.Position.X, HumanoidRootPart.Position.Y - vhrp.Position.Y, HumanoidRootPart.Position.Z - vhrp.Position.Z
+                    local sqrMag = dx*dx + dy*dy + dz*dz
+                    if sqrMag <= 4900 then
                         FastAttack(x)
                         Tween(CFrame.new(vhrp.Position + (vhrp.CFrame.LookVector * 20) + Vector3.new(0, vhrp.Position.Y > 60 and -20 or 20, 0)))
                         EquipWeapon("Melee")
                         return
                     end
-                    Tween(vhrp.CFrame) return
+                    Tween(vhrp.CFrame)
+                    return
                 end
             end
         end
-        for _,v in next,ReplicatedStorage:GetChildren() do
-            local vhrp=v:FindFirstChild("HumanoidRootPart")
-            if v:IsA("Model") and vhrp and v.Name==x and not IsDied(v) then Tween(vhrp.CFrame) return end
+        for _, v in next, ReplicatedStorage:GetChildren() do
+            local vhrp = v:FindFirstChild("HumanoidRootPart")
+            if v:IsA("Model") and vhrp and v.Name == x and not IsDied(v) then
+                Tween(vhrp.CFrame)
+                return
+            end
         end
-    end,function(e) warn("Modules ERROR:",e) end)
-end)
+    end, function(e) warn("Modules ERROR:", e) end)
+end
 
 local lastCheckSkill, MSkills = tick(), LocalPlayer.PlayerGui:WaitForChild("Main"):WaitForChild("Skills")
-CheckCooldownSkill = function (key, n) if tick() - lastCheckSkill <= 0.2 then return false end lastCheckSkill = tick()
+CheckCooldownSkill = function(key, n)
+    if tick() - lastCheckSkill <= 0.2 then return false end
+    lastCheckSkill = tick()
     n = n or (function(t) return t and t.Name end)(Character:FindFirstChildOfClass("Tool"))
     local keyfr = n and MSkills:FindFirstChild(n) and MSkills[n]:FindFirstChild(key) and MSkills[n][key]
     local cd = keyfr and keyfr:FindFirstChild("Cooldown")
@@ -1256,7 +1306,8 @@ mt.__namecall = newcclosure(function(self, ...)
                     if typeof(p) == "Vector3" then
                         for i = 1, #args do
                             if typeof(args[i]) == "Vector3" then
-                                args[i] = p break
+                                args[i] = p
+                                break
                             end
                         end
                     end
@@ -1268,7 +1319,8 @@ mt.__namecall = newcclosure(function(self, ...)
     return oldNamecall(self, ...)
 end)
 
-CheckOwnerBoat = function() if workspace.Boats:GetChildren() == 0 then return false end
+CheckOwnerBoat = function()
+    if workspace.Boats:GetChildren() == 0 then return false end
     for _, v in next, workspace.Boats:GetChildren() do
         if v:IsA("Model") and v:FindFirstChild("Owner") and tostring(v.Owner.Value) == LocalPlayer.Name and v.Humanoid.Value > 0 and CheckDistance(v) <= 6000 then
             return v
@@ -1278,15 +1330,16 @@ CheckOwnerBoat = function() if workspace.Boats:GetChildren() == 0 then return fa
 end
 
 local canPress = true
-PressKeyEvent = (function(k, d)
+PressKeyEvent = function(k, d)
     if not canPress then return end
     canPress = false
     task.spawn(function()
-        VirtualInputManager:SendKeyEvent(true, k, false, game) task.wait(d or 0)
+        VirtualInputManager:SendKeyEvent(true, k, false, game)
+        task.wait(d or 0)
         VirtualInputManager:SendKeyEvent(false, k, false, game)
         canPress = true
     end)
-end)
+end
 
 function CheckSafeZone(x)
 	for _, v in workspace._WorldOrigin.SafeZones:GetChildren() do
@@ -1297,8 +1350,8 @@ function CheckSafeZone(x)
 	return false
 end
 
-local all = 0;
-FarmBeli = (function(stopConditionFunc, ignoreY, ignoreFistStop)
+local all = 0
+FarmBeli = function(stopConditionFunc, ignoreY, ignoreFistStop)
     if type(stopConditionFunc) ~= "function" then stopConditionFunc = function() return false end end
 
     local chests, c = {}, 0
@@ -1350,8 +1403,8 @@ FarmBeli = (function(stopConditionFunc, ignoreY, ignoreFistStop)
                         end
 
                         if not IsDied(Character) then
-                            c += 1
-                            all += 1
+                            c = c + 1
+                            all = all + 1
 
                             if c >= getgenv().Settings["Reset After Collect Chests"] and (ignoreFistStop or not CheckTool("Fist of Darkness")) then
                                 if Character and Character:FindFirstChildWhichIsA("Humanoid") then
@@ -1377,7 +1430,7 @@ FarmBeli = (function(stopConditionFunc, ignoreY, ignoreFistStop)
             HopServerBrowser()
         end
     end
-end)
+end
 
 -- ============================================================
 -- [ SERVER BROWSER V5.5 - 20 PAGES BATCH + 4/5/6 PLAYERS ]
@@ -1460,7 +1513,7 @@ local function fetch20PageBatch(batchStart, rawTotals, usableTotals)
         local workerEnd = math.min(workerStart + PAGES_PER_WORKER - 1, batchEnd)
 
         if workerStart <= batchEnd then
-            pendingWorkers += 1
+            pendingWorkers = pendingWorkers + 1
             task.spawn(function()
                 for page = workerStart, workerEnd do
                     if not batchOpen then break end
@@ -1471,18 +1524,18 @@ local function fetch20PageBatch(batchStart, rawTotals, usableTotals)
                         for jobId, info in pairs(data) do
                             local count = type(info) == "table" and tonumber(info.Count) or nil
                             if count == 4 or count == 5 or count == 6 then
-                                rawTotals[count] += 1
+                                rawTotals[count] = rawTotals[count] + 1
                                 local cand = makeCandidate(jobId, info)
                                 if cand then
                                     batch[count][#batch[count] + 1] = cand
-                                    usableTotals[count] += 1
+                                    usableTotals[count] = usableTotals[count] + 1
                                 end
                             end
                         end
                     end
                     task.wait()
                 end
-                pendingWorkers -= 1
+                pendingWorkers = pendingWorkers - 1
             end)
         end
     end
@@ -1769,7 +1822,7 @@ local function CountAliveHumanBosses()
     for _, name in ipairs({"Jeremy", "Orbitus", "Diamond"}) do
         local m = CheckMonster(name)
         if m and not IsDied(m) then
-            count += 1
+            count = count + 1
         end
     end
     return count
@@ -1915,7 +1968,7 @@ task.spawn(function()
                                 if CurrentRace == "Human" then
                                     local aliveBosses = CountAliveHumanBosses()
                                     local killedCount = 0
-                                    for _ in pairs(HumanBossKills) do killedCount += 1 end
+                                    for _ in pairs(HumanBossKills) do killedCount = killedCount + 1 end
 
                                     if aliveBosses >= 2 or killedCount >= 2 then
                                         HumanServerLocked = true
@@ -1936,7 +1989,7 @@ task.spawn(function()
                                                         
                                                         HumanBossKills[v.Name] = true
                                                         killedCount = 0
-                                                        for _ in pairs(HumanBossKills) do killedCount += 1 end
+                                                        for _ in pairs(HumanBossKills) do killedCount = killedCount + 1 end
                                                         if killedCount >= 2 then
                                                             HumanServerLocked = true
                                                         end
