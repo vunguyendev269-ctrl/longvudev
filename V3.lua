@@ -1959,73 +1959,73 @@ task.spawn(function()
                                     -- ============================================================
                                     -- [ BẢN GỐC FISHMAN V3 (Speed: 150 studs/s) ]
                                     -- ============================================================
-                                    local TargetMelee = getgenv().Settings["Focus Melee"][cite: 2]
-                                    if CheckTool(TargetMelee) then[cite: 2]
-                                        local function CE(x) return workspace.Enemies:FindFirstChild(x) or workspace.SeaBeasts:FindFirstChild(x) end[cite: 2]
-                                        local e = CE("Piranha") or CE("Shark") or CE("Fish Crew Member")[cite: 2]
-                                        local v = CE("SeaBeast1")[cite: 2]
-                                        if e then Character.Humanoid.Sit = false[cite: 2]
-                                            repeat task.wait() KillMonster(e.Name)[cite: 2]
-                                            until not e or e.Humanoid.Health <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0[cite: 2]
-                                        elseif v then Character.Humanoid.Sit = false[cite: 2]
-                                            repeat task.wait()[cite: 2]
-                                                FastAttack()[cite: 2]
-                                                SetAimbotTarget(v.HumanoidRootPart)[cite: 2]
-                                                Tween(v.HumanoidRootPart.CFrame * CFrame.new(0, (v.HumanoidRootPart.Position.Y > -300 and 500 or 1000), 0))[cite: 2]
-                                                EquipWeapon(({"Melee", "Sword", "Gun", "Blox Fruit"})[math.random(4)])[cite: 2]
-                                                local k = ({"Z", "X", "C", "V", "F"})[math.random(5)][cite: 2]
-                                                if not Character:FindFirstChild("Portal-Portal") then[cite: 2]
-                                                    if CheckCooldownSkill(k) then[cite: 2]
-                                                        PressKeyEvent(k, 0.5)[cite: 2]
+                                    local TargetMelee = getgenv().Settings["Focus Melee"]
+                                    if CheckTool(TargetMelee) then
+                                        local function CE(x) return workspace.Enemies:FindFirstChild(x) or workspace.SeaBeasts:FindFirstChild(x) end
+                                        local e = CE("Piranha") or CE("Shark") or CE("Fish Crew Member")
+                                        local v = CE("SeaBeast1")
+                                        if e then Character.Humanoid.Sit = false
+                                            repeat task.wait() KillMonster(e.Name)
+                                            until not e or e.Humanoid.Health <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0
+                                        elseif v then Character.Humanoid.Sit = false
+                                            repeat task.wait()
+                                                FastAttack()
+                                                SetAimbotTarget(v.HumanoidRootPart)
+                                                Tween(v.HumanoidRootPart.CFrame * CFrame.new(0, (v.HumanoidRootPart.Position.Y > -300 and 500 or 1000), 0))
+                                                EquipWeapon(({"Melee", "Sword", "Gun", "Blox Fruit"})[math.random(4)])
+                                                local k = ({"Z", "X", "C", "V", "F"})[math.random(5)]
+                                                if not Character:FindFirstChild("Portal-Portal") then
+                                                    if CheckCooldownSkill(k) then
+                                                        PressKeyEvent(k, 0.5)
                                                     end
                                                 end
-                                            until not v or not v:FindFirstChild("Health") or v.Health.Value <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0[cite: 2]
+                                            until not v or not v:FindFirstChild("Health") or v.Health.Value <= 0 or not Character:FindFirstChild("Humanoid") or Character.Humanoid.Health <= 0
                                         else
-                                            local BOAT = CheckOwnerBoat()[cite: 2]
-                                            if BOAT then[cite: 2]
-                                                if not Character.Humanoid.Sit then Tween(BOAT.VehicleSeat.CFrame)[cite: 2]
-                                                    NeedSit = true[cite: 2]
-                                                else Tween(CFrame.new(-1000000, 49, 1000000), BOAT:FindFirstChild("Engine"))[cite: 2]
-                                                task.delay(5, function() Tween(false) end)[cite: 2]
+                                            local BOAT = CheckOwnerBoat()
+                                            if BOAT then
+                                                if not Character.Humanoid.Sit then Tween(BOAT.VehicleSeat.CFrame)
+                                                    NeedSit = true
+                                                else Tween(CFrame.new(-1000000, 49, 1000000), BOAT:FindFirstChild("Engine"))
+                                                task.delay(5, function() Tween(false) end)
                                                 end
                                             else
-                                                local PlaceNPC = Vector3.new(-1, 10, 2960)[cite: 2]
-                                                if (HumanoidRootPart.Position - PlaceNPC).Magnitude < 50 then[cite: 2]
-                                                    COMMF_:InvokeServer("BuyBoat", LocalPlayer.Team.Name == "Marine" and "PirateSloop" or "PirateBrigade")[cite: 2]
+                                                local PlaceNPC = Vector3.new(-1, 10, 2960)
+                                                if (HumanoidRootPart.Position - PlaceNPC).Magnitude < 50 then
+                                                    COMMF_:InvokeServer("BuyBoat", LocalPlayer.Team.Name == "Marine" and "PirateSloop" or "PirateBrigade")
                                                 else
-                                                    Character.Humanoid.Sit = false[cite: 2]
-                                                    Tween(CFrame.new(PlaceNPC))[cite: 2]
+                                                    Character.Humanoid.Sit = false
+                                                    Tween(CFrame.new(PlaceNPC))
                                                 end
                                             end
                                         end
-                                    else Character.Humanoid.Sit = false[cite: 2]
-                                        local npcName = MeleeData[TargetMelee] or TargetMelee[cite: 2]
-                                        local x, d = GetCFrameByNPC(npcName)[cite: 2]
-                                        if x then[cite: 2]
-                                            if d < 50 then[cite: 2]
-                                                if TargetMelee == "Dragon Claw" then[cite: 2]
-                                                    COMMF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")[cite: 2]
-                                                elseif TargetMelee == "Sharkman Karate" then[cite: 2]
-                                                    local hasSharkman = CheckTool("Sharkman Karate") or CheckInventory("Sharkman Karate")[cite: 2]
-                                                    if not hasSharkman and COMMF_:InvokeServer("BuySharkmanKarate", true) == 1 then[cite: 2]
-                                                        local pos = CFrame.new(-2599.621826171875, 238.19833374023438, -10315.998046875)[cite: 2]
-                                                        repeat task.wait() Tween(pos) until CheckDistance(pos) <= 30[cite: 2]
-                                                        COMMF_:InvokeServer("BuySharkmanKarate")[cite: 2]
+                                    else Character.Humanoid.Sit = false
+                                        local npcName = MeleeData[TargetMelee] or TargetMelee
+                                        local x, d = GetCFrameByNPC(npcName)
+                                        if x then
+                                            if d < 50 then
+                                                if TargetMelee == "Dragon Claw" then
+                                                    COMMF_:InvokeServer("BlackbeardReward", "DragonClaw", "2")
+                                                elseif TargetMelee == "Sharkman Karate" then
+                                                    local hasSharkman = CheckTool("Sharkman Karate") or CheckInventory("Sharkman Karate")
+                                                    if not hasSharkman and COMMF_:InvokeServer("BuySharkmanKarate", true) == 1 then
+                                                        local pos = CFrame.new(-2599.621826171875, 238.19833374023438, -10315.998046875)
+                                                        repeat task.wait() Tween(pos) until CheckDistance(pos) <= 30
+                                                        COMMF_:InvokeServer("BuySharkmanKarate")
                                                     end
                                                 else
-                                                    COMMF_:InvokeServer("Buy"..TargetMelee:gsub("%s+", ""))[cite: 2]
+                                                    COMMF_:InvokeServer("Buy"..TargetMelee:gsub("%s+", ""))
                                                 end
                                             else
-                                                SetText("Travel To ".. npcName.. " NPC")[cite: 2]
-                                                Tween(x)[cite: 2]
+                                                SetText("Travel To ".. npcName.. " NPC")
+                                                Tween(x)
                                             end
                                         else
-                                            SetText("Can't find ".. npcName.. " NPC")[cite: 2]
-                                            Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)[cite: 2]
-                                            LocalPlayer.CharacterAdded:Wait()[cite: 2]
-                                            local needSea = GetMeleeTargetSea(TargetMelee)[cite: 2]
-                                            if needSea == 2 then COMMF_:InvokeServer("TravelDressrosa")[cite: 2]
-                                            elseif needSea == 3 then COMMF_:InvokeServer("TravelZou") end[cite: 2]
+                                            SetText("Can't find ".. npcName.. " NPC")
+                                            Character.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+                                            LocalPlayer.CharacterAdded:Wait()
+                                            local needSea = GetMeleeTargetSea(TargetMelee)
+                                            if needSea == 2 then COMMF_:InvokeServer("TravelDressrosa")
+                                            elseif needSea == 3 then COMMF_:InvokeServer("TravelZou") end
                                         end
                                     end
                                 elseif CurrentRace == "Skypiea" then
