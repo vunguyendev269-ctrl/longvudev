@@ -2004,28 +2004,69 @@ local function SharkV3GetSeaBeast()
     return nearest
 end
 
+local SHARK_V3_EVENT_RANGE = 400
+
+local function SharkV3DistanceFromPlayer(obj)
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local pivot = SharkV3GetPivot(obj)
+    if not root or not pivot then return math.huge end
+    return (root.Position - pivot.Position).Magnitude
+end
+
+local function SharkV3IsWithinEventRange(obj)
+    return SharkV3DistanceFromPlayer(obj) <= SHARK_V3_EVENT_RANGE
+end
+
 local function SharkV3GetSeaMob()
-    local names = {"Shark", "Piranha", "Fish Crew Member"}
+    -- Only real, spawned sea-event mobs. Never use ReplicatedStorage templates.
+    local names = {Shark = true, Piranha = true, ["Fish Crew Member"] = true}
     local enemies = workspace:FindFirstChild("Enemies")
+    if not enemies then return nil end
 
-    for _, name in ipairs(names) do
-        local mob = enemies and enemies:FindFirstChild(name)
-        if mob and not IsDied(mob) then
-            return mob
-        end
-    end
+    local nearest = nil
+    local nearestDistance = SHARK_V3_EVENT_RANGE + 0.001
 
-    for _, name in ipairs(names) do
-        local mob = ReplicatedStorage:FindFirstChild(name)
-        if mob then
-            local hum = mob:FindFirstChildWhichIsA("Humanoid")
-            if hum and hum.Health > 0 then
-                return mob
+    for _, mob in ipairs(enemies:GetChildren()) do
+        if mob:IsA("Model") and names[mob.Name] and not IsDied(mob) then
+            local distance = SharkV3DistanceFromPlayer(mob)
+            if distance <= SHARK_V3_EVENT_RANGE and distance < nearestDistance then
+                nearest = mob
+                nearestDistance = distance
             end
         end
     end
 
-    return nil
+    return nearest
+end
+
+local function SharkV3GetEventBoat()
+    local boats = workspace:FindFirstChild("Boats")
+    if not boats then return nil end
+
+    local nearest = nil
+    local nearestDistance = SHARK_V3_EVENT_RANGE + 0.001
+
+    for _, boat in ipairs(boats:GetChildren()) do
+        if boat:IsA("Model") then
+            -- Player boats have Owner. Event ships are only accepted when they have
+            -- their own Health value + Engine and NO Owner, so other players' boats
+            -- can never become combat targets.
+            local owner = boat:FindFirstChild("Owner")
+            local engine = boat:FindFirstChild("Engine", true)
+            local health = boat:FindFirstChild("Health")
+            local hp = health and tonumber(health.Value) or 0
+
+            if not owner and engine and engine:IsA("BasePart") and hp > 0 then
+                local distance = SharkV3DistanceFromPlayer(engine)
+                if distance <= SHARK_V3_EVENT_RANGE and distance < nearestDistance then
+                    nearest = boat
+                    nearestDistance = distance
+                end
+            end
+        end
+    end
+
+    return nearest
 end
 
 local function SharkV3SendKey(key, hold)
@@ -2106,9 +2147,98 @@ local function SharkV3FindToolByTip(toolTip)
     return nil
 end
 
--- Shark V3 sword priority copied from the Fish Trial behavior:
--- Tushita first, then Yama, then any other Sword already owned.
--- This never calls LoadItem and never buys/forces a weapon.
+-- Shark V3 sword priority copied from Fish Trial behavior:
+-- Tushita first, then Yama, then any other Sword.
+-- Unlike the previous build, this can detect Tushita/Yama while they are still
+-- stored in the replicated inventory, load them into Backpack, then equip them.
+local SharkV3InventoryApi = {
+    tried = false,
+    ready = false,
+    Inventory = nil,
+    ItemConfig = nil,
+    ItemService = nil,
+}
+local SharkV3LoadItemLastTry = {}
+
+local function SharkV3InitInventoryApi()
+    if SharkV3InventoryApi.tried then
+        return SharkV3InventoryApi.ready
+    end
+    SharkV3InventoryApi.tried = true
+
+    local ok, inventory, itemConfig, itemService = pcall(function()
+        local inventoryModule = require(ReplicatedStorage.Controllers.UI.Inventory)
+        local configModule = require(ReplicatedStorage.ItemConfig)
+        local serviceModule = require(ReplicatedStorage.ItemReplicationService)
+        return inventoryModule, configModule, serviceModule
+    end)
+
+    if not ok or not inventory or not itemConfig or not itemService then
+        return false
+    end
+
+    local deadline = tick() + 5
+    repeat
+        local initialized = false
+        pcall(function()
+            initialized = inventory:GetIfInitialized() and itemService.IsInitialized == true
+        end)
+        if initialized then
+            SharkV3InventoryApi.Inventory = inventory
+            SharkV3InventoryApi.ItemConfig = itemConfig
+            SharkV3InventoryApi.ItemService = itemService
+            SharkV3InventoryApi.ready = true
+            return true
+        end
+        task.wait(0.1)
+    until tick() >= deadline
+
+    return false
+end
+
+local function SharkV3InventoryHasItem(name)
+    local wanted = tostring(name or ""):lower()
+    if wanted == "" then return false end
+
+    if SharkV3InitInventoryApi() then
+        local Inventory = SharkV3InventoryApi.Inventory
+        local ItemConfig = SharkV3InventoryApi.ItemConfig
+
+        local ok, found = pcall(function()
+            for _, tile in pairs(Inventory:GetTiles() or {}) do
+                local id = tile.ItemId
+                if id then
+                    local config = ItemConfig.match(id):unwrap()
+                    if config and config.Display then
+                        local itemName = config.Display.Name
+                            or (config.Index and config.Index.StorageKey)
+                            or tostring(id)
+                        if tostring(itemName):lower() == wanted then
+                            return true
+                        end
+                    end
+                end
+            end
+            return false
+        end)
+        if ok and found then return true end
+    end
+
+    -- Fallback for executors/game revisions where the new inventory modules are unavailable.
+    local ok, inventory = pcall(function()
+        return COMMF_:InvokeServer("getInventory")
+    end)
+    if ok and type(inventory) == "table" then
+        for _, item in pairs(inventory) do
+            if tostring(item.Name or ""):lower() == wanted then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 local function SharkV3FindNamedTool(name)
     local wanted = tostring(name or ""):lower()
     if wanted == "" then return nil end
@@ -2134,9 +2264,33 @@ local function SharkV3FindNamedTool(name)
     return nil
 end
 
+local function SharkV3LoadNamedTool(name)
+    local tool = SharkV3FindNamedTool(name)
+    if tool then return tool end
+    if not SharkV3InventoryHasItem(name) then return nil end
+
+    local now = tick()
+    local lastTry = SharkV3LoadItemLastTry[name] or 0
+    if now - lastTry >= 1 then
+        SharkV3LoadItemLastTry[name] = now
+        pcall(function()
+            COMMF_:InvokeServer("LoadItem", name)
+        end)
+    end
+
+    local deadline = tick() + 1.5
+    repeat
+        tool = SharkV3FindNamedTool(name)
+        if tool then return tool end
+        task.wait(0.08)
+    until tick() >= deadline
+
+    return SharkV3FindNamedTool(name)
+end
+
 local function SharkV3FindPreferredSword()
-    return SharkV3FindNamedTool("Tushita")
-        or SharkV3FindNamedTool("Yama")
+    return SharkV3LoadNamedTool("Tushita")
+        or SharkV3LoadNamedTool("Yama")
         or SharkV3FindToolByTip("Sword")
 end
 
@@ -2255,26 +2409,28 @@ local function SharkV3SpamSkillsFishTrialStyle(aliveFn)
 end
 
 local function SharkV3FightSeaMob(mob)
-    if not mob then return false end
+    if not mob or not SharkV3IsWithinEventRange(mob) then return false end
 
     SharkV3ResetMovement()
     while mob and mob.Parent and not IsDied(Character) do
         local hum = mob:FindFirstChildWhichIsA("Humanoid")
         if not hum or hum.Health <= 0 then break end
+        if not SharkV3IsWithinEventRange(mob) then break end
 
         local pivot = SharkV3GetPivot(mob)
         if not pivot then break end
 
-        SetText("Shark V3 | Killing " .. tostring(mob.Name))
+        SetText(string.format("Shark V3 | Killing %s | %d studs", tostring(mob.Name), math.floor(SharkV3DistanceFromPlayer(mob))))
         NeedSit = false
         SetAimbotTarget(pivot.Position)
 
         tweenToCFrame(pivot * CFrame.new(0, 20, 0), 35, function()
             local h = mob and mob:FindFirstChildWhichIsA("Humanoid")
             return not mob.Parent or not h or h.Health <= 0 or IsDied(Character)
+                or not SharkV3IsWithinEventRange(mob)
         end)
 
-        if IsDied(Character) then break end
+        if IsDied(Character) or not SharkV3IsWithinEventRange(mob) then break end
 
         SharkV3EquipAnyWeapon()
         FastAttack(mob.Name)
@@ -2282,7 +2438,64 @@ local function SharkV3FightSeaMob(mob)
         SharkV3SpamSkillsFishTrialStyle(function()
             if IsDied(Character) or not mob or not mob.Parent then return false end
             local h = mob:FindFirstChildWhichIsA("Humanoid")
-            return h ~= nil and h.Health > 0
+            return h ~= nil and h.Health > 0 and SharkV3IsWithinEventRange(mob)
+        end)
+
+        task.wait(0.08)
+    end
+
+    SetAimbotTarget(false)
+    cancelProxyTween()
+    NeedSit = false
+    return true
+end
+
+local function SharkV3FightEventBoat(boat)
+    if not boat then return false end
+
+    local owner = boat:FindFirstChild("Owner")
+    local engine = boat:FindFirstChild("Engine", true)
+    local health = boat:FindFirstChild("Health")
+    if owner or not engine or not engine:IsA("BasePart") or not health or tonumber(health.Value) <= 0 then
+        return false
+    end
+    if not SharkV3IsWithinEventRange(engine) then return false end
+
+    SharkV3ResetMovement()
+
+    while boat.Parent and engine.Parent and health.Parent and tonumber(health.Value) > 0 and not IsDied(Character) do
+        if boat:FindFirstChild("Owner") then break end
+        if not SharkV3IsWithinEventRange(engine) then break end
+
+        local hp = tonumber(health.Value) or 0
+        local distance = SharkV3DistanceFromPlayer(engine)
+        SetText(string.format("Shark V3 | Killing Event Ship | HP: %d | %d studs", math.floor(hp), math.floor(distance)))
+
+        NeedSit = false
+        SetAimbotTarget(engine.Position)
+
+        -- Banana-style event-ship position: attack around the Engine, slightly below it.
+        local attackCF = engine.CFrame * CFrame.new(0, -15, 0)
+        tweenToCFrame(attackCF, 35, function()
+            return IsDied(Character)
+                or not boat.Parent
+                or not engine.Parent
+                or not health.Parent
+                or tonumber(health.Value) <= 0
+                or boat:FindFirstChild("Owner") ~= nil
+                or not SharkV3IsWithinEventRange(engine)
+        end)
+
+        if IsDied(Character) or not SharkV3IsWithinEventRange(engine) then break end
+
+        SharkV3SpamSkillsFishTrialStyle(function()
+            return not IsDied(Character)
+                and boat.Parent ~= nil
+                and engine.Parent ~= nil
+                and health.Parent ~= nil
+                and tonumber(health.Value) > 0
+                and boat:FindFirstChild("Owner") == nil
+                and SharkV3IsWithinEventRange(engine)
         end)
 
         task.wait(0.08)
@@ -2428,15 +2641,24 @@ local function SharkV3FightSeaBeast(seaBeast)
 end
 
 local function RunSharkV3Quest()
+    -- Sea Beast is the actual Fishman V3 objective and is NOT range-limited.
+    local seaBeast = SharkV3GetSeaBeast()
+    if seaBeast then
+        SharkV3FightSeaBeast(seaBeast)
+        return
+    end
+
+    -- Every other sea event is opportunistic: only fight it when it is already
+    -- within 400 studs of the player. Do not chase distant events across the sea.
     local seaMob = SharkV3GetSeaMob()
     if seaMob then
         SharkV3FightSeaMob(seaMob)
         return
     end
 
-    local seaBeast = SharkV3GetSeaBeast()
-    if seaBeast then
-        SharkV3FightSeaBeast(seaBeast)
+    local eventBoat = SharkV3GetEventBoat()
+    if eventBoat then
+        SharkV3FightEventBoat(eventBoat)
         return
     end
 
