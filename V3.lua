@@ -2072,6 +2072,188 @@ local function SharkV3EquipAnyWeapon()
     return nil
 end
 
+-- Fish Trial-style skill spam for Shark V3.
+-- Same idea as the tested Fish Trial: equip once per phase, then tap a fixed
+-- sequence with fixed timing. Do NOT use the shared CheckCooldownSkill throttle
+-- here, because checking Z first can suppress X/C/V/F in the same pass.
+local SHARK_FISH_MELEE_KEYS = {"Z", "X", "C"}
+local SHARK_FISH_SWORD_KEYS = {"Z", "X"}
+local SHARK_FISH_FALLBACK_KEYS = {"Z", "X", "C", "V", "F"}
+local SHARK_FISH_MELEE_INTERVAL = 3 / (#SHARK_FISH_MELEE_KEYS * 2)
+local SHARK_FISH_SWORD_INTERVAL = 1 / (#SHARK_FISH_SWORD_KEYS * 2)
+local SHARK_FISH_FALLBACK_INTERVAL = 0.35
+local SHARK_FISH_KEY_HOLD = 0.05
+
+local function SharkV3FindToolByTip(toolTip)
+    local char = LocalPlayer.Character
+    if char then
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tostring(tool.ToolTip or "") == toolTip then
+                return tool
+            end
+        end
+    end
+
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tostring(tool.ToolTip or "") == toolTip then
+                return tool
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Shark V3 sword priority copied from the Fish Trial behavior:
+-- Tushita first, then Yama, then any other Sword already owned.
+-- This never calls LoadItem and never buys/forces a weapon.
+local function SharkV3FindNamedTool(name)
+    local wanted = tostring(name or ""):lower()
+    if wanted == "" then return nil end
+
+    local char = LocalPlayer.Character
+    if char then
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower() == wanted then
+                return tool
+            end
+        end
+    end
+
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:lower() == wanted then
+                return tool
+            end
+        end
+    end
+
+    return nil
+end
+
+local function SharkV3FindPreferredSword()
+    return SharkV3FindNamedTool("Tushita")
+        or SharkV3FindNamedTool("Yama")
+        or SharkV3FindToolByTip("Sword")
+end
+
+local function SharkV3EquipPhaseTool(tool)
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not (char and hum and hum.Health > 0 and tool and tool.Parent) then
+        return false
+    end
+
+    if tool.Parent ~= char then
+        pcall(function()
+            hum:EquipTool(tool)
+        end)
+        task.wait(0.05)
+    end
+
+    return tool.Parent == char
+end
+
+local function SharkV3ToolHasSkill(tool, keyName)
+    if not tool then return false end
+
+    local main = LocalPlayer.PlayerGui and LocalPlayer.PlayerGui:FindFirstChild("Main")
+    local skills = main and main:FindFirstChild("Skills")
+    local toolUI = skills and skills:FindFirstChild(tool.Name)
+
+    -- If the skill UI is not replicated yet, do not block the key. This keeps
+    -- the spam behavior resilient during fast equip/UI transitions.
+    if not toolUI then return true end
+    return toolUI:FindFirstChild(keyName) ~= nil
+end
+
+local function SharkV3TapTrialStyleKey(tool, keyName, interval, aliveFn)
+    if aliveFn and not aliveFn() then return false end
+
+    if SharkV3ToolHasSkill(tool, keyName) then
+        SharkV3SendKey(keyName, SHARK_FISH_KEY_HOLD)
+    else
+        task.wait(SHARK_FISH_KEY_HOLD)
+    end
+
+    local remain = math.max(0, interval - SHARK_FISH_KEY_HOLD)
+    if remain > 0 then
+        task.wait(remain)
+    end
+
+    return not aliveFn or aliveFn()
+end
+
+local function SharkV3SpamTrialStylePhase(tool, keys, interval, aliveFn, repeats)
+    if not SharkV3EquipPhaseTool(tool) then return false end
+
+    for _ = 1, (repeats or 2) do
+        for _, keyName in ipairs(keys) do
+            if not SharkV3TapTrialStyleKey(tool, keyName, interval, aliveFn) then
+                return false
+            end
+        end
+    end
+
+    return not aliveFn or aliveFn()
+end
+
+local function SharkV3SpamSkillsFishTrialStyle(aliveFn)
+    if aliveFn and not aliveFn() then return false end
+
+    local usedPhase = false
+    local melee = SharkV3FindToolByTip("Melee")
+    if melee then
+        usedPhase = true
+        if not SharkV3SpamTrialStylePhase(
+            melee,
+            SHARK_FISH_MELEE_KEYS,
+            SHARK_FISH_MELEE_INTERVAL,
+            aliveFn,
+            2
+        ) then
+            return false
+        end
+    end
+
+    if aliveFn and not aliveFn() then return false end
+
+    local sword = SharkV3FindPreferredSword()
+    if sword then
+        usedPhase = true
+        if not SharkV3SpamTrialStylePhase(
+            sword,
+            SHARK_FISH_SWORD_KEYS,
+            SHARK_FISH_SWORD_INTERVAL,
+            aliveFn,
+            2
+        ) then
+            return false
+        end
+    end
+
+    -- "Có gì dùng nấy": account không có Melee/Sword vẫn dùng tool hiện có.
+    -- Cách spam vẫn là fixed sequence/fixed timing như Fish Trial, không check
+    -- cooldown chung từng phím.
+    if not usedPhase then
+        local tool = SharkV3EquipAnyWeapon()
+        if tool then
+            return SharkV3SpamTrialStylePhase(
+                tool,
+                SHARK_FISH_FALLBACK_KEYS,
+                SHARK_FISH_FALLBACK_INTERVAL,
+                aliveFn,
+                2
+            )
+        end
+    end
+
+    return not aliveFn or aliveFn()
+end
+
 local function SharkV3FightSeaMob(mob)
     if not mob then return false end
 
@@ -2097,15 +2279,11 @@ local function SharkV3FightSeaMob(mob)
         SharkV3EquipAnyWeapon()
         FastAttack(mob.Name)
 
-        for _, key in ipairs({"Z", "X", "C", "V", "F"}) do
-            if not mob.Parent then break end
+        SharkV3SpamSkillsFishTrialStyle(function()
+            if IsDied(Character) or not mob or not mob.Parent then return false end
             local h = mob:FindFirstChildWhichIsA("Humanoid")
-            if not h or h.Health <= 0 then break end
-            if CheckCooldownSkill(key) then
-                SharkV3SendKey(key, 0.06)
-                task.wait(0.06)
-            end
-        end
+            return h ~= nil and h.Health > 0
+        end)
 
         task.wait(0.08)
     end
@@ -2222,13 +2400,11 @@ local function SharkV3FightSeaBeast(seaBeast)
         if IsDied(Character) then break end
 
         SharkV3EquipAnyWeapon()
-        for _, key in ipairs({"Z", "X", "C", "V", "F"}) do
-            if not seaBeast.Parent then break end
+        SharkV3SpamSkillsFishTrialStyle(function()
+            if IsDied(Character) or not seaBeast or not seaBeast.Parent then return false end
             local h = seaBeast:FindFirstChild("Health")
-            if not h or tonumber(h.Value) <= 0 then break end
-            SharkV3SendKey(key, 0.06)
-            task.wait(0.08)
-        end
+            return h ~= nil and tonumber(h.Value) > 0
+        end)
 
         task.wait(0.15)
     end
