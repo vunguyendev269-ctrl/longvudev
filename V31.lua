@@ -1935,21 +1935,262 @@ end
 
 
 -- ============================================================
--- [ FISHMAN / SHARK V3 HELPERS - PROXY TWEEN COMPATIBLE ]
--- Boat movement is handled separately from character Tween().
--- Character/Sea Beast movement continues to use the new proxy tween system.
+-- [ FISHMAN / SHARK V3 - STANDALONE DRIVE LOGIC INTEGRATED ]
+-- Integrated from the tested standalone flow. Other race logic is untouched.
+-- Flow: quest -> reset if boat NPC >3500 -> buy PirateBrigade -> board ->
+-- real VehicleSeat drive at speed 500 -> hunt Sea Beast (no range cap) and
+-- Ship Raid/Shark/Piranha/Fish Crew within 400 -> hover combat -> claim V3.
 -- ============================================================
 
-local function SharkV3GetPlayerBoat()
+local SHARK_V3_PLAYER_TWEEN_SPEED = 160
+local SHARK_V3_BOAT_DRIVE_SPEED = 500
+local SHARK_V3_EVENT_RANGE = 400
+local SHARK_V3_BOAT_BUY_CF = CFrame.new(-14, 10, 2955)
+local SHARK_V3_BOAT_BUY_RESET_DISTANCE = 3500
+local SHARK_V3_TARGET = Vector3.new(-67, 5.5647872686386108, 4205 + math.random(1, 400))
+
+local sharkV3CharTween = nil
+local sharkV3HoverBodyVelocity = nil
+local sharkV3Running = false
+
+local function SharkV3Done(force)
+    local map = ScanV3Titles(force == true)
+    return map and map["Fishman"] == true
+end
+
+local function SharkV3GetCharacter()
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    return char, hum, hrp
+end
+
+local function SharkV3WaitCharacter()
+    while sharkV3Running do
+        local char, hum, hrp = SharkV3GetCharacter()
+        if char and hum and hrp and hum.Health > 0 then
+            return char, hum, hrp
+        end
+        SetText("Shark V3 | Waiting character")
+        task.wait(0.5)
+    end
+    return nil
+end
+
+local function SharkV3SetNoClip()
+    local char = LocalPlayer.Character
+    if not char then return end
+    for _, obj in ipairs(char:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            obj.CanCollide = false
+        end
+    end
+end
+
+local function SharkV3StopCharTween()
+    if sharkV3CharTween then
+        pcall(function() sharkV3CharTween:Cancel() end)
+        sharkV3CharTween = nil
+    end
+end
+
+local function SharkV3RemoveHover()
+    if sharkV3HoverBodyVelocity and sharkV3HoverBodyVelocity.Parent then
+        sharkV3HoverBodyVelocity:Destroy()
+    end
+    sharkV3HoverBodyVelocity = nil
+end
+
+local function SharkV3EnsureHover()
+    local _, hum, hrp = SharkV3GetCharacter()
+    if not hum or not hrp or hum.Health <= 0 then return nil end
+
+    hum.Sit = false
+    NeedSit = false
+    SharkV3SetNoClip()
+
+    if not sharkV3HoverBodyVelocity or sharkV3HoverBodyVelocity.Parent ~= hrp then
+        SharkV3RemoveHover()
+        sharkV3HoverBodyVelocity = Instance.new("BodyVelocity")
+        sharkV3HoverBodyVelocity.Name = "_FishmanV3Hover"
+        sharkV3HoverBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        sharkV3HoverBodyVelocity.P = 50000
+        sharkV3HoverBodyVelocity.Velocity = Vector3.zero
+        sharkV3HoverBodyVelocity.Parent = hrp
+    end
+
+    sharkV3HoverBodyVelocity.Velocity = Vector3.zero
+    return sharkV3HoverBodyVelocity
+end
+
+local function SharkV3CleanupMovement()
+    NeedSit = false
+    SetAimbotTarget(false)
+    SharkV3StopCharTween()
+    SharkV3RemoveHover()
+    cancelProxyTween()
+end
+
+local function SharkV3TweenCharacterTo(targetCF, arriveDistance)
+    arriveDistance = tonumber(arriveDistance) or 4
+    local char, hum, hrp = SharkV3WaitCharacter()
+    if not char then return false end
+
+    NeedSit = false
+    hum.Sit = false
+    SharkV3SetNoClip()
+    cancelProxyTween()
+    SharkV3StopCharTween()
+
+    while sharkV3Running and char.Parent and hum.Health > 0 do
+        local distance = (hrp.Position - targetCF.Position).Magnitude
+        if distance <= arriveDistance then
+            hrp.CFrame = targetCF
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            return true
+        end
+
+        local duration = math.max(distance / SHARK_V3_PLAYER_TWEEN_SPEED, 0.05)
+        sharkV3CharTween = TweenService:Create(
+            hrp,
+            TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+            {CFrame = targetCF}
+        )
+        sharkV3CharTween:Play()
+
+        while sharkV3Running and sharkV3CharTween and sharkV3CharTween.PlaybackState == Enum.PlaybackState.Playing do
+            if not hrp.Parent or hum.Health <= 0 then
+                SharkV3StopCharTween()
+                return false
+            end
+            hum.Sit = false
+            SharkV3SetNoClip()
+            if (hrp.Position - targetCF.Position).Magnitude <= arriveDistance then
+                SharkV3StopCharTween()
+                hrp.CFrame = targetCF
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                return true
+            end
+            task.wait(0.03)
+        end
+
+        sharkV3CharTween = nil
+        task.wait()
+    end
+
+    return false
+end
+
+local function SharkV3StepTweenCharacterTo(targetCF, speed)
+    speed = tonumber(speed) or SHARK_V3_PLAYER_TWEEN_SPEED
+    local char, hum, hrp = SharkV3GetCharacter()
+    if not char or not hum or not hrp or hum.Health <= 0 then return false end
+
+    NeedSit = false
+    hum.Sit = false
+    SharkV3SetNoClip()
+    SharkV3EnsureHover()
+    cancelProxyTween()
+    SharkV3StopCharTween()
+
+    local distance = (hrp.Position - targetCF.Position).Magnitude
+    if distance <= 8 then
+        hrp.CFrame = targetCF
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        return true
+    end
+
+    local duration = math.min(math.max(distance / speed, 0.03), 0.20)
+    sharkV3CharTween = TweenService:Create(
+        hrp,
+        TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+        {CFrame = targetCF}
+    )
+    sharkV3CharTween:Play()
+    task.wait(duration)
+    SharkV3StopCharTween()
+    return true
+end
+
+local function SharkV3EnsureQuest()
+    if SharkV3Done(false) then return true, "done" end
+
+    SetText("Shark V3 | Checking / accepting Wenlocktoad quest")
+    local ok, state = pcall(function()
+        return COMMF_:InvokeServer("Wenlocktoad", "1")
+    end)
+
+    if not ok then
+        task.wait(1)
+        return true, "retry later"
+    end
+
+    if state == 0 then
+        pcall(function() COMMF_:InvokeServer("Wenlocktoad", "2") end)
+        task.wait(1)
+        return true, "quest started"
+    elseif state == 2 then
+        pcall(function() COMMF_:InvokeServer("Wenlocktoad", "3") end)
+        task.wait(1)
+        if SharkV3Done(true) then
+            return true, "done"
+        end
+        return true, "claim attempted"
+    end
+
+    return true, "quest active"
+end
+
+local function SharkV3TryCompleteAfterSeaBeast()
+    SetText("Shark V3 | Sea Beast defeated | Completing Wenlocktoad")
+
+    for _ = 1, 12 do
+        if SharkV3Done(true) then
+            SetText("Shark V3 | DONE | Warrior of the Sea")
+            return true
+        end
+
+        local ok, state = pcall(function()
+            return COMMF_:InvokeServer("Wenlocktoad", "1")
+        end)
+
+        if ok then
+            if state == 2 then
+                pcall(function() COMMF_:InvokeServer("Wenlocktoad", "3") end)
+            elseif state == 0 then
+                pcall(function() COMMF_:InvokeServer("Wenlocktoad", "2") end)
+                task.wait(1)
+                return false
+            else
+                pcall(function() COMMF_:InvokeServer("Wenlocktoad", "3") end)
+            end
+        end
+
+        task.wait(1)
+    end
+
+    return false
+end
+
+local function SharkV3OwnerMatchesLocal(owner)
+    if not owner then return false end
+    local value = owner.Value
+    if typeof(value) == "Instance" then
+        return value == LocalPlayer or value.Name == LocalPlayer.Name
+    end
+    return tostring(value) == LocalPlayer.Name
+end
+
+local function SharkV3GetOwnBoat()
     local boats = workspace:FindFirstChild("Boats")
     if not boats then return nil end
 
     for _, boat in ipairs(boats:GetChildren()) do
         if boat:IsA("Model") then
             local owner = boat:FindFirstChild("Owner")
-            local health = boat:FindFirstChild("Humanoid")
-            local hp = health and tonumber(health.Value) or 0
-            if owner and tostring(owner.Value) == LocalPlayer.Name and hp > 0 then
+            local hpObj = boat:FindFirstChild("Humanoid")
+            local hp = hpObj and tonumber(hpObj.Value) or 0
+            if SharkV3OwnerMatchesLocal(owner) and hp > 0 then
                 return boat
             end
         end
@@ -1958,711 +2199,585 @@ local function SharkV3GetPlayerBoat()
     return nil
 end
 
-local function SharkV3GetPivot(obj)
-    if not obj then return nil end
-    if typeof(obj) == "CFrame" then return obj end
-    if typeof(obj) == "Vector3" then return CFrame.new(obj) end
-    if typeof(obj) ~= "Instance" then return nil end
-    if obj:IsA("BasePart") then return obj.CFrame end
-
-    if obj:IsA("Model") then
-        local ok, pivot = pcall(function()
-            return obj:GetPivot()
-        end)
-        if ok and typeof(pivot) == "CFrame" then
-            return pivot
-        end
-
-        local root = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-        return root and root.CFrame or nil
-    end
-
-    return nil
+local function SharkV3GetBoatSeat(boat)
+    if not boat then return nil end
+    local direct = boat:FindFirstChild("VehicleSeat")
+    if direct and direct:IsA("VehicleSeat") then return direct end
+    return boat:FindFirstChildWhichIsA("VehicleSeat", true)
 end
 
-local function SharkV3GetSeaBeast()
-    local seaBeasts = workspace:FindFirstChild("SeaBeasts")
-    if not seaBeasts then return nil end
+local function SharkV3BuyPirateBrigadeUntilOwned()
+    while sharkV3Running do
+        local boat = SharkV3GetOwnBoat()
+        if boat then return boat end
 
-    local nearest = nil
-    local nearestDistance = math.huge
-    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-
-    for _, seaBeast in ipairs(seaBeasts:GetChildren()) do
-        local health = seaBeast:FindFirstChild("Health")
-        local hp = health and tonumber(health.Value) or 0
-        local pivot = hp > 0 and SharkV3GetPivot(seaBeast) or nil
-        if pivot then
-            local distance = root and (root.Position - pivot.Position).Magnitude or 0
-            if distance < nearestDistance then
-                nearest = seaBeast
-                nearestDistance = distance
+        local _, humBefore, hrpBefore = SharkV3WaitCharacter()
+        if humBefore and hrpBefore and humBefore.Health > 0 then
+            local distToBoatNpc = (hrpBefore.Position - SHARK_V3_BOAT_BUY_CF.Position).Magnitude
+            if distToBoatNpc > SHARK_V3_BOAT_BUY_RESET_DISTANCE then
+                SetText(string.format(
+                    "Shark V3 | Boat NPC %.0f studs > %d | Reset character",
+                    distToBoatNpc,
+                    SHARK_V3_BOAT_BUY_RESET_DISTANCE
+                ))
+                SharkV3CleanupMovement()
+                pcall(function() humBefore.Health = 0 end)
+                task.wait(1)
+                SharkV3WaitCharacter()
+                task.wait(0.5)
+                continue
             end
         end
-    end
 
-    return nearest
-end
+        SetText("Shark V3 | Tween boat NPC | Buy PirateBrigade")
+        SharkV3TweenCharacterTo(SHARK_V3_BOAT_BUY_CF, 8)
 
-local SHARK_V3_EVENT_RANGE = 400
-
-local function SharkV3DistanceFromPlayer(obj)
-    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local pivot = SharkV3GetPivot(obj)
-    if not root or not pivot then return math.huge end
-    return (root.Position - pivot.Position).Magnitude
-end
-
-local function SharkV3IsWithinEventRange(obj)
-    return SharkV3DistanceFromPlayer(obj) <= SHARK_V3_EVENT_RANGE
-end
-
-local function SharkV3GetSeaMob()
-    -- Only real, spawned sea-event mobs. Never use ReplicatedStorage templates.
-    local names = {Shark = true, Piranha = true, ["Fish Crew Member"] = true}
-    local enemies = workspace:FindFirstChild("Enemies")
-    if not enemies then return nil end
-
-    local nearest = nil
-    local nearestDistance = SHARK_V3_EVENT_RANGE + 0.001
-
-    for _, mob in ipairs(enemies:GetChildren()) do
-        if mob:IsA("Model") and names[mob.Name] and not IsDied(mob) then
-            local distance = SharkV3DistanceFromPlayer(mob)
-            if distance <= SHARK_V3_EVENT_RANGE and distance < nearestDistance then
-                nearest = mob
-                nearestDistance = distance
-            end
-        end
-    end
-
-    return nearest
-end
-
-local function SharkV3GetEventBoat()
-    local boats = workspace:FindFirstChild("Boats")
-    if not boats then return nil end
-
-    local nearest = nil
-    local nearestDistance = SHARK_V3_EVENT_RANGE + 0.001
-
-    for _, boat in ipairs(boats:GetChildren()) do
-        if boat:IsA("Model") then
-            -- Player boats have Owner. Event ships are only accepted when they have
-            -- their own Health value + Engine and NO Owner, so other players' boats
-            -- can never become combat targets.
-            local owner = boat:FindFirstChild("Owner")
-            local engine = boat:FindFirstChild("Engine", true)
-            local health = boat:FindFirstChild("Health")
-            local hp = health and tonumber(health.Value) or 0
-
-            if not owner and engine and engine:IsA("BasePart") and hp > 0 then
-                local distance = SharkV3DistanceFromPlayer(engine)
-                if distance <= SHARK_V3_EVENT_RANGE and distance < nearestDistance then
-                    nearest = boat
-                    nearestDistance = distance
-                end
-            end
-        end
-    end
-
-    return nearest
-end
-
-local function SharkV3SendKey(key, hold)
-    local keyCode = typeof(key) == "EnumItem" and key or Enum.KeyCode[tostring(key)]
-    if not keyCode then return end
-    VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-    task.wait(hold or 0.06)
-    VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-end
-
-local SharkV3ResetMovement
-
-local function SharkV3EquipAnyWeapon()
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not char or not hum or hum.Health <= 0 then return nil end
-
-    local equipped = char:FindFirstChildOfClass("Tool")
-    if equipped then return equipped end
-
-    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer:FindFirstChild("Backpack")
-    if not backpack then return nil end
-
-    -- Prefer normal combat categories, but never require a specific weapon/melee.
-    for _, wantedTip in ipairs({"Melee", "Sword", "Blox Fruit", "Gun"}) do
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and tostring(tool.ToolTip or "") == wantedTip then
-                pcall(function() hum:EquipTool(tool) end)
-                task.wait(0.08)
-                return tool
-            end
-        end
-    end
-
-    -- Fallback: equip any Tool the account currently has.
-    for _, tool in ipairs(backpack:GetChildren()) do
-        if tool:IsA("Tool") then
-            pcall(function() hum:EquipTool(tool) end)
-            task.wait(0.08)
-            return tool
-        end
-    end
-
-    return nil
-end
-
--- Fish Trial-style skill spam for Shark V3.
--- Same idea as the tested Fish Trial: equip once per phase, then tap a fixed
--- sequence with fixed timing. Do NOT use the shared CheckCooldownSkill throttle
--- here, because checking Z first can suppress X/C/V/F in the same pass.
-local SHARK_FISH_MELEE_KEYS = {"Z", "X", "C"}
-local SHARK_FISH_SWORD_KEYS = {"Z", "X"}
-local SHARK_FISH_FALLBACK_KEYS = {"Z", "X", "C", "V", "F"}
-local SHARK_FISH_MELEE_INTERVAL = 3 / (#SHARK_FISH_MELEE_KEYS * 2)
-local SHARK_FISH_SWORD_INTERVAL = 1 / (#SHARK_FISH_SWORD_KEYS * 2)
-local SHARK_FISH_FALLBACK_INTERVAL = 0.35
-local SHARK_FISH_KEY_HOLD = 0.05
-
-local function SharkV3FindToolByTip(toolTip)
-    local char = LocalPlayer.Character
-    if char then
-        for _, tool in ipairs(char:GetChildren()) do
-            if tool:IsA("Tool") and tostring(tool.ToolTip or "") == toolTip then
-                return tool
-            end
-        end
-    end
-
-    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and tostring(tool.ToolTip or "") == toolTip then
-                return tool
-            end
-        end
-    end
-
-    return nil
-end
-
--- Shark V3 sword priority copied from Fish Trial behavior:
--- Tushita first, then Yama, then any other Sword.
--- Unlike the previous build, this can detect Tushita/Yama while they are still
--- stored in the replicated inventory, load them into Backpack, then equip them.
-local SharkV3InventoryApi = {
-    tried = false,
-    ready = false,
-    Inventory = nil,
-    ItemConfig = nil,
-    ItemService = nil,
-}
-local SharkV3LoadItemLastTry = {}
-
-local function SharkV3InitInventoryApi()
-    if SharkV3InventoryApi.tried then
-        return SharkV3InventoryApi.ready
-    end
-    SharkV3InventoryApi.tried = true
-
-    local ok, inventory, itemConfig, itemService = pcall(function()
-        local inventoryModule = require(ReplicatedStorage.Controllers.UI.Inventory)
-        local configModule = require(ReplicatedStorage.ItemConfig)
-        local serviceModule = require(ReplicatedStorage.ItemReplicationService)
-        return inventoryModule, configModule, serviceModule
-    end)
-
-    if not ok or not inventory or not itemConfig or not itemService then
-        return false
-    end
-
-    local deadline = tick() + 5
-    repeat
-        local initialized = false
-        pcall(function()
-            initialized = inventory:GetIfInitialized() and itemService.IsInitialized == true
-        end)
-        if initialized then
-            SharkV3InventoryApi.Inventory = inventory
-            SharkV3InventoryApi.ItemConfig = itemConfig
-            SharkV3InventoryApi.ItemService = itemService
-            SharkV3InventoryApi.ready = true
-            return true
-        end
-        task.wait(0.1)
-    until tick() >= deadline
-
-    return false
-end
-
-local function SharkV3InventoryHasItem(name)
-    local wanted = tostring(name or ""):lower()
-    if wanted == "" then return false end
-
-    if SharkV3InitInventoryApi() then
-        local Inventory = SharkV3InventoryApi.Inventory
-        local ItemConfig = SharkV3InventoryApi.ItemConfig
-
-        local ok, found = pcall(function()
-            for _, tile in pairs(Inventory:GetTiles() or {}) do
-                local id = tile.ItemId
-                if id then
-                    local config = ItemConfig.match(id):unwrap()
-                    if config and config.Display then
-                        local itemName = config.Display.Name
-                            or (config.Index and config.Index.StorageKey)
-                            or tostring(id)
-                        if tostring(itemName):lower() == wanted then
-                            return true
-                        end
-                    end
-                end
-            end
-            return false
-        end)
-        if ok and found then return true end
-    end
-
-    -- Fallback for executors/game revisions where the new inventory modules are unavailable.
-    local ok, inventory = pcall(function()
-        return COMMF_:InvokeServer("getInventory")
-    end)
-    if ok and type(inventory) == "table" then
-        for _, item in pairs(inventory) do
-            if tostring(item.Name or ""):lower() == wanted then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
-local function SharkV3FindNamedTool(name)
-    local wanted = tostring(name or ""):lower()
-    if wanted == "" then return nil end
-
-    local char = LocalPlayer.Character
-    if char then
-        for _, tool in ipairs(char:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name:lower() == wanted then
-                return tool
-            end
-        end
-    end
-
-    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name:lower() == wanted then
-                return tool
-            end
-        end
-    end
-
-    return nil
-end
-
-local function SharkV3LoadNamedTool(name)
-    local tool = SharkV3FindNamedTool(name)
-    if tool then return tool end
-    if not SharkV3InventoryHasItem(name) then return nil end
-
-    local now = tick()
-    local lastTry = SharkV3LoadItemLastTry[name] or 0
-    if now - lastTry >= 1 then
-        SharkV3LoadItemLastTry[name] = now
-        pcall(function()
-            COMMF_:InvokeServer("LoadItem", name)
-        end)
-    end
-
-    local deadline = tick() + 1.5
-    repeat
-        tool = SharkV3FindNamedTool(name)
-        if tool then return tool end
-        task.wait(0.08)
-    until tick() >= deadline
-
-    return SharkV3FindNamedTool(name)
-end
-
-local function SharkV3FindPreferredSword()
-    return SharkV3LoadNamedTool("Tushita")
-        or SharkV3LoadNamedTool("Yama")
-        or SharkV3FindToolByTip("Sword")
-end
-
-local function SharkV3EquipPhaseTool(tool)
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not (char and hum and hum.Health > 0 and tool and tool.Parent) then
-        return false
-    end
-
-    if tool.Parent ~= char then
-        pcall(function()
-            hum:EquipTool(tool)
-        end)
-        task.wait(0.05)
-    end
-
-    return tool.Parent == char
-end
-
-local function SharkV3ToolHasSkill(tool, keyName)
-    if not tool then return false end
-
-    local main = LocalPlayer.PlayerGui and LocalPlayer.PlayerGui:FindFirstChild("Main")
-    local skills = main and main:FindFirstChild("Skills")
-    local toolUI = skills and skills:FindFirstChild(tool.Name)
-
-    -- If the skill UI is not replicated yet, do not block the key. This keeps
-    -- the spam behavior resilient during fast equip/UI transitions.
-    if not toolUI then return true end
-    return toolUI:FindFirstChild(keyName) ~= nil
-end
-
-local function SharkV3TapTrialStyleKey(tool, keyName, interval, aliveFn)
-    if aliveFn and not aliveFn() then return false end
-
-    if SharkV3ToolHasSkill(tool, keyName) then
-        SharkV3SendKey(keyName, SHARK_FISH_KEY_HOLD)
-    else
-        task.wait(SHARK_FISH_KEY_HOLD)
-    end
-
-    local remain = math.max(0, interval - SHARK_FISH_KEY_HOLD)
-    if remain > 0 then
-        task.wait(remain)
-    end
-
-    return not aliveFn or aliveFn()
-end
-
-local function SharkV3SpamTrialStylePhase(tool, keys, interval, aliveFn, repeats)
-    if not SharkV3EquipPhaseTool(tool) then return false end
-
-    for _ = 1, (repeats or 2) do
-        for _, keyName in ipairs(keys) do
-            if not SharkV3TapTrialStyleKey(tool, keyName, interval, aliveFn) then
-                return false
-            end
-        end
-    end
-
-    return not aliveFn or aliveFn()
-end
-
-local function SharkV3SpamSkillsFishTrialStyle(aliveFn)
-    if aliveFn and not aliveFn() then return false end
-
-    local usedPhase = false
-    local melee = SharkV3FindToolByTip("Melee")
-    if melee then
-        usedPhase = true
-        if not SharkV3SpamTrialStylePhase(
-            melee,
-            SHARK_FISH_MELEE_KEYS,
-            SHARK_FISH_MELEE_INTERVAL,
-            aliveFn,
-            2
-        ) then
-            return false
-        end
-    end
-
-    if aliveFn and not aliveFn() then return false end
-
-    local sword = SharkV3FindPreferredSword()
-    if sword then
-        usedPhase = true
-        if not SharkV3SpamTrialStylePhase(
-            sword,
-            SHARK_FISH_SWORD_KEYS,
-            SHARK_FISH_SWORD_INTERVAL,
-            aliveFn,
-            2
-        ) then
-            return false
-        end
-    end
-
-    -- "Có gì dùng nấy": account không có Melee/Sword vẫn dùng tool hiện có.
-    -- Cách spam vẫn là fixed sequence/fixed timing như Fish Trial, không check
-    -- cooldown chung từng phím.
-    if not usedPhase then
-        local tool = SharkV3EquipAnyWeapon()
-        if tool then
-            return SharkV3SpamTrialStylePhase(
-                tool,
-                SHARK_FISH_FALLBACK_KEYS,
-                SHARK_FISH_FALLBACK_INTERVAL,
-                aliveFn,
-                2
-            )
-        end
-    end
-
-    return not aliveFn or aliveFn()
-end
-
-local function SharkV3FightSeaMob(mob)
-    if not mob or not SharkV3IsWithinEventRange(mob) then return false end
-
-    SharkV3ResetMovement()
-    while mob and mob.Parent and not IsDied(Character) do
-        local hum = mob:FindFirstChildWhichIsA("Humanoid")
-        if not hum or hum.Health <= 0 then break end
-        if not SharkV3IsWithinEventRange(mob) then break end
-
-        local pivot = SharkV3GetPivot(mob)
-        if not pivot then break end
-
-        SetText(string.format("Shark V3 | Killing %s | %d studs", tostring(mob.Name), math.floor(SharkV3DistanceFromPlayer(mob))))
-        NeedSit = false
-        SetAimbotTarget(pivot.Position)
-
-        tweenToCFrame(pivot * CFrame.new(0, 20, 0), 35, function()
-            local h = mob and mob:FindFirstChildWhichIsA("Humanoid")
-            return not mob.Parent or not h or h.Health <= 0 or IsDied(Character)
-                or not SharkV3IsWithinEventRange(mob)
-        end)
-
-        if IsDied(Character) or not SharkV3IsWithinEventRange(mob) then break end
-
-        SharkV3EquipAnyWeapon()
-        FastAttack(mob.Name)
-
-        SharkV3SpamSkillsFishTrialStyle(function()
-            if IsDied(Character) or not mob or not mob.Parent then return false end
-            local h = mob:FindFirstChildWhichIsA("Humanoid")
-            return h ~= nil and h.Health > 0 and SharkV3IsWithinEventRange(mob)
-        end)
-
-        task.wait(0.08)
-    end
-
-    SetAimbotTarget(false)
-    cancelProxyTween()
-    NeedSit = false
-    return true
-end
-
-local function SharkV3FightEventBoat(boat)
-    if not boat then return false end
-
-    local owner = boat:FindFirstChild("Owner")
-    local engine = boat:FindFirstChild("Engine", true)
-    local health = boat:FindFirstChild("Health")
-    if owner or not engine or not engine:IsA("BasePart") or not health or tonumber(health.Value) <= 0 then
-        return false
-    end
-    if not SharkV3IsWithinEventRange(engine) then return false end
-
-    SharkV3ResetMovement()
-
-    while boat.Parent and engine.Parent and health.Parent and tonumber(health.Value) > 0 and not IsDied(Character) do
-        if boat:FindFirstChild("Owner") then break end
-        if not SharkV3IsWithinEventRange(engine) then break end
-
-        local hp = tonumber(health.Value) or 0
-        local distance = SharkV3DistanceFromPlayer(engine)
-        SetText(string.format("Shark V3 | Killing Event Ship | HP: %d | %d studs", math.floor(hp), math.floor(distance)))
-
-        NeedSit = false
-        SetAimbotTarget(engine.Position)
-
-        -- Banana-style event-ship position: attack around the Engine, slightly below it.
-        local attackCF = engine.CFrame * CFrame.new(0, -15, 0)
-        tweenToCFrame(attackCF, 35, function()
-            return IsDied(Character)
-                or not boat.Parent
-                or not engine.Parent
-                or not health.Parent
-                or tonumber(health.Value) <= 0
-                or boat:FindFirstChild("Owner") ~= nil
-                or not SharkV3IsWithinEventRange(engine)
-        end)
-
-        if IsDied(Character) or not SharkV3IsWithinEventRange(engine) then break end
-
-        SharkV3SpamSkillsFishTrialStyle(function()
-            return not IsDied(Character)
-                and boat.Parent ~= nil
-                and engine.Parent ~= nil
-                and health.Parent ~= nil
-                and tonumber(health.Value) > 0
-                and boat:FindFirstChild("Owner") == nil
-                and SharkV3IsWithinEventRange(engine)
-        end)
-
-        task.wait(0.08)
-    end
-
-    SetAimbotTarget(false)
-    cancelProxyTween()
-    NeedSit = false
-    return true
-end
-
-SharkV3ResetMovement = function()
-    NeedSit = false
-    SetAimbotTarget(false)
-    cancelProxyTween()
-
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.Sit = false
-    end
-end
-
-local function SharkV3BoatStep()
-    local boat = SharkV3GetPlayerBoat()
-
-    if not boat then
-        SharkV3ResetMovement()
-
-        local buyBoatPos = CFrame.new(-14, 10, 2955)
-        SetText("Shark V3 | Buying PirateBrigade boat")
-
-        -- Use the NEW character proxy tween, but keep the exact standalone
-        -- boat-buy coordinate and behavior.
-        NeedSit = false
-        Tween(buyBoatPos)
-
-        if CheckDistance(buyBoatPos) < 10 then
+        local _, hum, hrp = SharkV3GetCharacter()
+        if hum and hrp and hum.Health > 0 and (hrp.Position - SHARK_V3_BOAT_BUY_CF.Position).Magnitude < 10 then
             pcall(function()
                 COMMF_:InvokeServer("BuyBoat", "PirateBrigade")
             end)
             task.wait(2)
+        else
+            task.wait(0.5)
         end
-
-        return false
     end
 
-    local seat = boat:FindFirstChild("VehicleSeat")
-    if not seat or not seat:IsA("BasePart") then
-        NeedSit = false
-        SetText("Shark V3 | Boat missing VehicleSeat")
-        return false
-    end
-
-    -- Keep this EXACTLY like the tested standalone flow.
-    local targetBoatCFrame = CFrame.new(
-        -67,
-        5.5647872686386108,
-        4205 + math.random(1, 400)
-    )
-
-    if CheckDistance(seat.CFrame, targetBoatCFrame) > 800 then
-        SetText("Shark V3 | Move boat to sea")
-
-        -- Do NOT PivotTo the model and do NOT use Tween(target, Engine).
-        -- The tested flow moves VehicleSeat directly.
-        pcall(function()
-            seat.CFrame = targetBoatCFrame
-        end)
-        task.wait(0.5)
-        return false
-    end
-
-    if CheckDistance(seat.CFrame) > 5 then
-        SetText("Shark V3 | Tween to boat seat")
-        NeedSit = false
-
-        -- Only the PLAYER uses the new proxy tween.
-        Tween(seat.CFrame + Vector3.new(0, math.random(-1, 2), 0))
-        return false
-    end
-
-    -- No timeout and no hop here. The boat may need to stay in this
-    -- Sea Beast spawn area for a long time.
-    NeedSit = true
-    SetText("Shark V3 | Waiting for Sea Beast")
-    return true
+    return nil
 end
 
-local function SharkV3FightSeaBeast(seaBeast)
-    if not seaBeast then return false end
-
-    SharkV3ResetMovement()
-
-    while seaBeast and seaBeast.Parent and not IsDied(Character) do
-        local health = seaBeast:FindFirstChild("Health")
-        local hp = health and tonumber(health.Value) or 0
-        if hp <= 0 then break end
-        if ScanV3Titles(false)["Fishman"] == true then break end
-
-        local pivot = SharkV3GetPivot(seaBeast)
-        if not pivot then break end
-
-        SetText("Shark V3 | Killing Sea Beast | HP: " .. tostring(math.floor(hp)))
-
-        local height = pivot.Position.Y >= -179 and 300 or 900
-        local attackCF = CFrame.new(pivot.Position + Vector3.new(0, height, 0))
-        SetAimbotTarget(pivot.Position)
-
-        tweenToCFrame(attackCF, 45, function()
-            local h = seaBeast and seaBeast:FindFirstChild("Health")
-            return not seaBeast.Parent or not h or tonumber(h.Value) <= 0 or IsDied(Character)
-        end)
-
-        if IsDied(Character) then break end
-
-        SharkV3EquipAnyWeapon()
-        SharkV3SpamSkillsFishTrialStyle(function()
-            if IsDied(Character) or not seaBeast or not seaBeast.Parent then return false end
-            local h = seaBeast:FindFirstChild("Health")
-            return h ~= nil and tonumber(h.Value) > 0
-        end)
-
+local function SharkV3LeaveSeat()
+    local _, hum = SharkV3GetCharacter()
+    if not hum then return end
+    if hum.Sit then
+        hum.Sit = false
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+        task.wait(0.08)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
         task.wait(0.15)
+    end
+end
+
+local function SharkV3BoardBoat(boat)
+    while sharkV3Running do
+        boat = boat and boat.Parent and boat or SharkV3GetOwnBoat()
+        if not boat then return false end
+
+        local seat = SharkV3GetBoatSeat(boat)
+        if not seat then
+            SetText("Shark V3 | Boat missing VehicleSeat")
+            return false
+        end
+
+        local _, hum, hrp = SharkV3WaitCharacter()
+        if hum.SeatPart == seat and hum.Sit then
+            SharkV3CleanupMovement()
+            NeedSit = true
+            return true
+        end
+
+        SetText("Shark V3 | Tween to VehicleSeat")
+        SharkV3TweenCharacterTo(seat.CFrame * CFrame.new(0, 2, 0), 4)
+        task.wait(0.25)
+
+        if hum.SeatPart ~= seat then
+            pcall(function() seat:Sit(hum) end)
+            task.wait(0.35)
+        end
+
+        if hum.SeatPart == seat then
+            SharkV3CleanupMovement()
+            NeedSit = true
+            return true
+        end
+
+        if hrp then
+            hrp.CFrame = seat.CFrame * CFrame.new(0, 1, 0)
+        end
+        task.wait(0.25)
+    end
+
+    return false
+end
+
+local function SharkV3GetModelPart(model)
+    if not model or not model.Parent then return nil end
+    return model:FindFirstChild("HumanoidRootPart")
+        or model.PrimaryPart
+        or model:FindFirstChildWhichIsA("BasePart")
+end
+
+local function SharkV3GetSeaBeast()
+    local folder = workspace:FindFirstChild("SeaBeasts")
+    local _, _, hrp = SharkV3GetCharacter()
+    if not folder then return nil end
+
+    local best, bestDist = nil, math.huge
+    for _, obj in ipairs(folder:GetChildren()) do
+        if obj.Name ~= "Leviathan" and obj.Name ~= "Leviathan Segment" then
+            local hp = obj:FindFirstChild("Health")
+            local part = SharkV3GetModelPart(obj)
+            if hp and tonumber(hp.Value) and tonumber(hp.Value) > 0 and part then
+                local d = hrp and (part.Position - hrp.Position).Magnitude or 0
+                if d < bestDist then
+                    best = obj
+                    bestDist = d
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+local SHARK_V3_SHIP_NAMES = {
+    PirateBrigade = true,
+    PirateGrandBrigade = true,
+    FishBoat = true,
+}
+
+local function SharkV3GetNearbyShip(maxDistance)
+    maxDistance = tonumber(maxDistance) or SHARK_V3_EVENT_RANGE
+    local enemies = workspace:FindFirstChild("Enemies")
+    local _, _, hrp = SharkV3GetCharacter()
+    if not enemies or not hrp then return nil end
+
+    local best, bestDist = nil, math.huge
+    for _, obj in ipairs(enemies:GetChildren()) do
+        if SHARK_V3_SHIP_NAMES[obj.Name] then
+            local hp = obj:FindFirstChild("Health")
+            local part = SharkV3GetModelPart(obj)
+            if hp and tonumber(hp.Value) and tonumber(hp.Value) > 0 and part then
+                local d = (part.Position - hrp.Position).Magnitude
+                if d <= maxDistance and d < bestDist then
+                    best = obj
+                    bestDist = d
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+local SHARK_V3_SEA_MOB_NAMES = {
+    Shark = true,
+    Piranha = true,
+    ["Fish Crew Member"] = true,
+}
+
+local function SharkV3GetNearbySeaMob(maxDistance)
+    maxDistance = tonumber(maxDistance) or SHARK_V3_EVENT_RANGE
+    local enemies = workspace:FindFirstChild("Enemies")
+    local _, _, hrp = SharkV3GetCharacter()
+    if not enemies or not hrp then return nil end
+
+    local best, bestDist = nil, math.huge
+    for _, obj in ipairs(enemies:GetChildren()) do
+        if SHARK_V3_SEA_MOB_NAMES[obj.Name] then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local part = SharkV3GetModelPart(obj)
+            if hum and hum.Health > 0 and part then
+                local d = (part.Position - hrp.Position).Magnitude
+                if d <= maxDistance and d < bestDist then
+                    best = obj
+                    bestDist = d
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+local function SharkV3TargetAlive(target, kind)
+    if not target or not target.Parent then return false end
+    if kind == "mob" then
+        local hum = target:FindFirstChildOfClass("Humanoid")
+        return hum ~= nil and hum.Health > 0
+    end
+    local hp = target:FindFirstChild("Health")
+    return hp ~= nil and tonumber(hp.Value) ~= nil and tonumber(hp.Value) > 0
+end
+
+local function SharkV3TargetHealthText(target, kind)
+    if kind == "mob" then
+        local hum = target and target:FindFirstChildOfClass("Humanoid")
+        return hum and math.floor(hum.Health) or 0
+    end
+    local hp = target and target:FindFirstChild("Health")
+    return math.floor(tonumber(hp and hp.Value) or 0)
+end
+
+local function SharkV3SendKey(keyName, hold)
+    local key = Enum.KeyCode[keyName]
+    if not key then return end
+    VirtualInputManager:SendKeyEvent(true, key, false, game)
+    task.wait(hold or 0.05)
+    VirtualInputManager:SendKeyEvent(false, key, false, game)
+end
+
+local function SharkV3FindToolByTip(tip)
+    local char = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    for _, container in ipairs({char, backpack}) do
+        if container then
+            for _, tool in ipairs(container:GetChildren()) do
+                if tool:IsA("Tool") and tostring(tool.ToolTip or "") == tip then
+                    return tool
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function SharkV3EquipTool(tool)
+    local char, hum = SharkV3GetCharacter()
+    if not char or not hum or not tool then return false end
+    if tool.Parent ~= char then
+        pcall(function() hum:EquipTool(tool) end)
+        task.wait(0.20)
+    end
+    return tool.Parent == char
+end
+
+local function SharkV3LoadAndEquipNamed(itemName)
+    local char, hum = SharkV3GetCharacter()
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not char or not hum then return nil end
+
+    local existing = char:FindFirstChild(itemName) or (backpack and backpack:FindFirstChild(itemName))
+    if existing and existing:IsA("Tool") then
+        SharkV3EquipTool(existing)
+        return existing
+    end
+
+    pcall(function()
+        COMMF_:InvokeServer("LoadItem", itemName)
+    end)
+    task.wait(0.30)
+
+    backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    local loaded = char:FindFirstChild(itemName) or (backpack and backpack:FindFirstChild(itemName))
+    if loaded and loaded:IsA("Tool") then
+        SharkV3EquipTool(loaded)
+        return loaded
+    end
+
+    return nil
+end
+
+local function SharkV3GetPreferredSword()
+    return SharkV3LoadAndEquipNamed("Tushita")
+        or SharkV3LoadAndEquipNamed("Yama")
+        or SharkV3FindToolByTip("Sword")
+end
+
+local function SharkV3ClickM1()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        task.wait(0.03)
+        VirtualUser:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+    end)
+end
+
+local function SharkV3SpamCombatCycle(isStillAlive)
+    if not isStillAlive() then return end
+
+    local melee = SharkV3FindToolByTip("Melee")
+    if melee and SharkV3EquipTool(melee) then
+        for _ = 1, 2 do
+            for _, key in ipairs({"Z", "X", "C"}) do
+                if not isStillAlive() then return end
+                SharkV3SendKey(key, 0.05)
+                task.wait(0.45)
+            end
+        end
+    end
+
+    if not isStillAlive() then return end
+
+    local sword = SharkV3GetPreferredSword()
+    if sword and SharkV3EquipTool(sword) then
+        for _ = 1, 2 do
+            for _, key in ipairs({"Z", "X"}) do
+                if not isStillAlive() then return end
+                SharkV3SendKey(key, 0.05)
+                task.wait(0.20)
+            end
+        end
+    end
+
+    if not melee and not sword then
+        local fallback = SharkV3FindToolByTip("Blox Fruit") or SharkV3FindToolByTip("Gun")
+        if fallback and SharkV3EquipTool(fallback) then
+            for _, key in ipairs({"Z", "X", "C", "V", "F"}) do
+                if not isStillAlive() then return end
+                SharkV3SendKey(key, 0.05)
+                task.wait(0.30)
+            end
+        end
+    end
+end
+
+local function SharkV3FightTarget(target, kind, hoverHeight, distanceLimited)
+    if not target then return false end
+
+    SharkV3LeaveSeat()
+    SharkV3StopCharTween()
+    SharkV3EnsureHover()
+
+    local name = target.Name
+    SetText("Shark V3 | Attacking " .. tostring(name))
+
+    while sharkV3Running and SharkV3TargetAlive(target, kind) do
+        local char, hum, hrp = SharkV3GetCharacter()
+        local part = SharkV3GetModelPart(target)
+        if not char or not hum or not hrp or hum.Health <= 0 or not part then break end
+
+        local directDistance = (part.Position - hrp.Position).Magnitude
+        if distanceLimited and directDistance > SHARK_V3_EVENT_RANGE then
+            SetText(tostring(name) .. " left 400-stud range | Stop target")
+            break
+        end
+
+        local targetCF = CFrame.new(part.Position + Vector3.new(0, hoverHeight, 0))
+        SetAimbotTarget(part.Position)
+        SharkV3EnsureHover()
+        SharkV3StepTweenCharacterTo(targetCF, SHARK_V3_PLAYER_TWEEN_SPEED)
+
+        if hrp and hrp.Parent then
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+
+        SharkV3ClickM1()
+        SharkV3SpamCombatCycle(function()
+            if not SharkV3TargetAlive(target, kind) then return false end
+            local _, h, r = SharkV3GetCharacter()
+            if not h or not r or h.Health <= 0 then return false end
+            local p = SharkV3GetModelPart(target)
+            if not p then return false end
+            if distanceLimited and (p.Position - r.Position).Magnitude > SHARK_V3_EVENT_RANGE then
+                return false
+            end
+            SetAimbotTarget(p.Position)
+            return true
+        end)
+
+        SetText(string.format(
+            "Shark V3 | Attacking %s | HP: %d",
+            tostring(name),
+            SharkV3TargetHealthText(target, kind)
+        ))
+        task.wait(0.05)
     end
 
     SetAimbotTarget(false)
-    cancelProxyTween()
-    NeedSit = false
+    SharkV3StopCharTween()
+    SharkV3RemoveHover()
+    return not SharkV3TargetAlive(target, kind)
+end
 
-    local health = seaBeast and seaBeast:FindFirstChild("Health")
-    local killed = not seaBeast or not seaBeast.Parent or not health or tonumber(health.Value) <= 0
-    if killed then
-        SetText("Shark V3 | Sea Beast defeated | Completing quest")
-        pcall(function()
-            COMMF_:InvokeServer("Wenlocktoad", "3")
-        end)
-        task.wait(0.8)
-        ScanV3Titles(true)
+local function SharkV3ScanCombatTarget()
+    -- Sea Beast always has priority and intentionally has NO distance cap.
+    local seaBeast = SharkV3GetSeaBeast()
+    if seaBeast then
+        return seaBeast, "seaBeast", 300, false
     end
 
-    return killed
+    local ship = SharkV3GetNearbyShip(SHARK_V3_EVENT_RANGE)
+    if ship then
+        return ship, "ship", 75, true
+    end
+
+    local seaMob = SharkV3GetNearbySeaMob(SHARK_V3_EVENT_RANGE)
+    if seaMob then
+        return seaMob, "mob", 20, true
+    end
+
+    return nil
+end
+
+local function SharkV3StopBoat(seat)
+    if not seat or not seat.Parent then return end
+    pcall(function()
+        seat.Throttle = 0
+        seat.Steer = 0
+    end)
+end
+
+local function SharkV3DriveBoatTowardV3(boat)
+    if not boat or not boat.Parent then return false, "boat missing" end
+    local seat = SharkV3GetBoatSeat(boat)
+    if not seat then return false, "seat missing" end
+
+    if not SharkV3BoardBoat(boat) then return false, "cannot board" end
+
+    SetText(string.format("Shark V3 | Driving PirateBrigade | Speed %d", SHARK_V3_BOAT_DRIVE_SPEED))
+
+    while sharkV3Running and boat.Parent and seat.Parent do
+        if SharkV3Done(false) then
+            SharkV3StopBoat(seat)
+            return true, "done"
+        end
+
+        local target, kind, height, limited = SharkV3ScanCombatTarget()
+        if target then
+            SharkV3StopBoat(seat)
+            local killed = SharkV3FightTarget(target, kind == "mob" and "mob" or kind, height, limited)
+            if kind == "seaBeast" and killed then
+                if SharkV3TryCompleteAfterSeaBeast() then
+                    return true, "done"
+                end
+            end
+
+            boat = SharkV3GetOwnBoat()
+            if not boat then return false, "boat destroyed" end
+            seat = SharkV3GetBoatSeat(boat)
+            if not seat then return false, "seat missing" end
+            SharkV3BoardBoat(boat)
+        end
+
+        local flatTarget = Vector3.new(SHARK_V3_TARGET.X, seat.Position.Y, SHARK_V3_TARGET.Z)
+        local flatBoat = Vector3.new(seat.Position.X, seat.Position.Y, seat.Position.Z)
+        local delta = flatTarget - flatBoat
+        local horizontal = Vector3.new(delta.X, 0, delta.Z)
+        local distance = horizontal.Magnitude
+
+        if distance <= 35 then
+            SharkV3StopBoat(seat)
+            SetText(string.format("Shark V3 | At sea area | Waiting events | Z %.0f", SHARK_V3_TARGET.Z))
+            return true, "arrived"
+        end
+
+        local _, hum = SharkV3GetCharacter()
+        if not hum or hum.SeatPart ~= seat or not hum.Sit then
+            SharkV3StopBoat(seat)
+            if not SharkV3BoardBoat(boat) then return false, "lost seat" end
+        end
+
+        if horizontal.Magnitude > 0.01 then
+            seat.MaxSpeed = SHARK_V3_BOAT_DRIVE_SPEED
+            seat.Torque = 0.2
+            seat.TurnSpeed = 5
+            seat.HeadsUpDisplay = true
+
+            local localDir = seat.CFrame:VectorToObjectSpace(horizontal.Unit)
+            seat.Steer = math.clamp(localDir.X * 3, -1, 1)
+            seat.Throttle = 1
+        end
+
+        SetText(string.format(
+            "Shark V3 | Driving to sea area | %.0f studs | Speed %d",
+            distance,
+            SHARK_V3_BOAT_DRIVE_SPEED
+        ))
+        task.wait(0.05)
+    end
+
+    SharkV3StopBoat(seat)
+    return false, "drive stopped"
+end
+
+local function SharkV3HoldAreaAndHunt()
+    while sharkV3Running do
+        if SharkV3Done(false) then
+            SetText("Shark V3 | DONE | Warrior of the Sea")
+            return true
+        end
+
+        local target, kind, height, limited = SharkV3ScanCombatTarget()
+        if target then
+            local killed = SharkV3FightTarget(target, kind == "mob" and "mob" or kind, height, limited)
+            if kind == "seaBeast" and killed then
+                if SharkV3TryCompleteAfterSeaBeast() then
+                    return true
+                end
+            end
+        else
+            local boat = SharkV3GetOwnBoat()
+            if not boat then
+                boat = SharkV3BuyPirateBrigadeUntilOwned()
+            end
+
+            if not boat then
+                task.wait(0.5)
+                continue
+            end
+
+            local seat = SharkV3GetBoatSeat(boat)
+            if not seat then
+                SetText("Shark V3 | Waiting valid VehicleSeat")
+                task.wait(0.5)
+            else
+                local flatTarget = Vector3.new(SHARK_V3_TARGET.X, seat.Position.Y, SHARK_V3_TARGET.Z)
+                local boatPos = Vector3.new(seat.Position.X, seat.Position.Y, seat.Position.Z)
+                local horizontalDistance = (boatPos - flatTarget).Magnitude
+
+                if horizontalDistance > 60 then
+                    SharkV3DriveBoatTowardV3(boat)
+                else
+                    if SharkV3BoardBoat(boat) then
+                        SharkV3StopBoat(seat)
+                        SetText("Shark V3 | Waiting Sea Beast / Ship Raid / Shark / Piranha")
+                    end
+                    task.wait(0.5)
+                end
+            end
+        end
+
+        task.wait(0.05)
+    end
+
+    return false
 end
 
 local function RunSharkV3Quest()
-    -- Sea Beast is the actual Fishman V3 objective and is NOT range-limited.
-    local seaBeast = SharkV3GetSeaBeast()
-    if seaBeast then
-        SharkV3FightSeaBeast(seaBeast)
-        return
-    end
+    if sharkV3Running then return end
+    sharkV3Running = true
 
-    -- Every other sea event is opportunistic: only fight it when it is already
-    -- within 400 studs of the player. Do not chase distant events across the sea.
-    local seaMob = SharkV3GetSeaMob()
-    if seaMob then
-        SharkV3FightSeaMob(seaMob)
-        return
-    end
+    local ok, err = xpcall(function()
+        if SharkV3Done(false) then
+            SetText("Shark V3 | DONE already")
+            return
+        end
 
-    local eventBoat = SharkV3GetEventBoat()
-    if eventBoat then
-        SharkV3FightEventBoat(eventBoat)
-        return
-    end
+        local questOk, questState = SharkV3EnsureQuest()
+        if not questOk or questState == "done" then return end
 
-    SharkV3BoatStep()
+        local boat = SharkV3BuyPirateBrigadeUntilOwned()
+        if not boat then
+            SetText("Shark V3 | Failed to get PirateBrigade")
+            return
+        end
+
+        local okDrive, reason = SharkV3DriveBoatTowardV3(boat)
+        if reason == "done" or SharkV3Done(false) then
+            SetText("Shark V3 | DONE | Warrior of the Sea")
+            return
+        end
+
+        if not okDrive then
+            SetText("Shark V3 | Drive interrupted: " .. tostring(reason) .. " | retrying")
+        end
+
+        SharkV3HoldAreaAndHunt()
+    end, function(e)
+        return debug.traceback(tostring(e), 2)
+    end)
+
+    sharkV3Running = false
+    SharkV3CleanupMovement()
+    local boat = SharkV3GetOwnBoat()
+    local seat = boat and SharkV3GetBoatSeat(boat)
+    SharkV3StopBoat(seat)
+
+    if not ok then
+        warn("[Shark V3 Integrated Error]:", err)
+        SetText("Shark V3 | ERROR: " .. tostring(err))
+    end
 end
 
 -- ============================================================
@@ -2794,6 +2909,13 @@ task.spawn(function()
                             end
                         else
                             FarmBeli(function() return LocalPlayer.Data.Beli.Value >= 500000 end)
+                        end
+                    elseif CurrentRace == "Fishman" then
+                        SetRaceStatus(3)
+                        if LocalPlayer.Data.Beli.Value >= 2000000 then
+                            RunSharkV3Quest()
+                        else
+                            FarmBeli(function() return LocalPlayer.Data.Beli.Value >= 2000000 end)
                         end
                     elseif COMMF_:InvokeServer("Wenlocktoad") == nil then
                         SetRaceStatus(3)
