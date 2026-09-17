@@ -1938,13 +1938,14 @@ end
 -- [ FISHMAN / SHARK V3 - STANDALONE DRIVE LOGIC INTEGRATED ]
 -- Integrated from the tested standalone flow. Other race logic is untouched.
 -- Flow: quest -> reset if boat NPC >3500 -> buy PirateBrigade -> board ->
--- real VehicleSeat drive at speed 500 -> hunt Sea Beast (no range cap) and
--- Ship Raid/Shark/Piranha/Fish Crew within 400 -> hover combat -> claim V3.
+-- real VehicleSeat drive at speed 500 -> hunt Sea Beast within 5000 studs
+-- using the V3 proxy tween; Ship Raid/Shark/Piranha/Fish Crew stay within 400.
 -- ============================================================
 
 local SHARK_V3_PLAYER_TWEEN_SPEED = 160
 local SHARK_V3_BOAT_DRIVE_SPEED = 500
 local SHARK_V3_EVENT_RANGE = 400
+local SHARK_V3_SEABEAST_RANGE = 5000
 local SHARK_V3_BOAT_BUY_CF = CFrame.new(-14, 10, 2955)
 local SHARK_V3_BOAT_BUY_RESET_DISTANCE = 3500
 local SHARK_V3_TARGET = Vector3.new(-67, 5.5647872686386108, 4205 + math.random(1, 400))
@@ -2307,10 +2308,11 @@ local function SharkV3GetModelPart(model)
         or model:FindFirstChildWhichIsA("BasePart")
 end
 
-local function SharkV3GetSeaBeast()
+local function SharkV3GetSeaBeast(maxDistance)
+    maxDistance = tonumber(maxDistance) or SHARK_V3_SEABEAST_RANGE
     local folder = workspace:FindFirstChild("SeaBeasts")
     local _, _, hrp = SharkV3GetCharacter()
-    if not folder then return nil end
+    if not folder or not hrp then return nil end
 
     local best, bestDist = nil, math.huge
     for _, obj in ipairs(folder:GetChildren()) do
@@ -2318,8 +2320,8 @@ local function SharkV3GetSeaBeast()
             local hp = obj:FindFirstChild("Health")
             local part = SharkV3GetModelPart(obj)
             if hp and tonumber(hp.Value) and tonumber(hp.Value) > 0 and part then
-                local d = hrp and (part.Position - hrp.Position).Magnitude or 0
-                if d < bestDist then
+                local d = (part.Position - hrp.Position).Magnitude
+                if d <= maxDistance and d < bestDist then
                     best = obj
                     bestDist = d
                 end
@@ -2527,7 +2529,11 @@ local function SharkV3FightTarget(target, kind, hoverHeight, distanceLimited)
 
     SharkV3LeaveSeat()
     SharkV3StopCharTween()
-    SharkV3EnsureHover()
+    if kind == "seaBeast" then
+        SharkV3RemoveHover()
+    else
+        SharkV3EnsureHover()
+    end
 
     local name = target.Name
     SetText("Shark V3 | Attacking " .. tostring(name))
@@ -2537,19 +2543,51 @@ local function SharkV3FightTarget(target, kind, hoverHeight, distanceLimited)
         local part = SharkV3GetModelPart(target)
         if not char or not hum or not hrp or hum.Health <= 0 or not part then break end
 
+        local maxTargetDistance = nil
+        if kind == "seaBeast" then
+            maxTargetDistance = SHARK_V3_SEABEAST_RANGE
+        elseif distanceLimited then
+            maxTargetDistance = SHARK_V3_EVENT_RANGE
+        end
+
         local directDistance = (part.Position - hrp.Position).Magnitude
-        if distanceLimited and directDistance > SHARK_V3_EVENT_RANGE then
-            SetText(tostring(name) .. " left 400-stud range | Stop target")
+        if maxTargetDistance and directDistance > maxTargetDistance then
+            SetText(string.format(
+                "Shark V3 | %s left %d-stud range | Stop target",
+                tostring(name),
+                maxTargetDistance
+            ))
             break
         end
 
         local targetCF = CFrame.new(part.Position + Vector3.new(0, hoverHeight, 0))
         SetAimbotTarget(part.Position)
-        SharkV3EnsureHover()
-        SharkV3StepTweenCharacterTo(targetCF, SHARK_V3_PLAYER_TWEEN_SPEED)
 
-        if hrp and hrp.Parent then
-            hrp.AssemblyLinearVelocity = Vector3.zero
+        if kind == "seaBeast" then
+            -- Sea Beast: approach with the main V3 proxy tween.
+            SharkV3RemoveHover()
+            NeedSit = false
+            hum.Sit = false
+            SharkV3SetNoClip()
+            tweenToCFrame(targetCF, 45, function()
+                if not SharkV3TargetAlive(target, kind) then return true end
+                local _, currentHum, currentRoot = SharkV3GetCharacter()
+                local currentPart = SharkV3GetModelPart(target)
+                if not currentHum or not currentRoot or currentHum.Health <= 0 or not currentPart then
+                    return true
+                end
+                return (currentPart.Position - currentRoot.Position).Magnitude > SHARK_V3_SEABEAST_RANGE
+            end)
+            if not SharkV3TargetAlive(target, kind) then break end
+            SharkV3EnsureHover()
+        else
+            SharkV3EnsureHover()
+            SharkV3StepTweenCharacterTo(targetCF, SHARK_V3_PLAYER_TWEEN_SPEED)
+        end
+
+        local _, _, currentRoot = SharkV3GetCharacter()
+        if currentRoot and currentRoot.Parent then
+            currentRoot.AssemblyLinearVelocity = Vector3.zero
         end
 
         SharkV3ClickM1()
@@ -2559,9 +2597,17 @@ local function SharkV3FightTarget(target, kind, hoverHeight, distanceLimited)
             if not h or not r or h.Health <= 0 then return false end
             local p = SharkV3GetModelPart(target)
             if not p then return false end
-            if distanceLimited and (p.Position - r.Position).Magnitude > SHARK_V3_EVENT_RANGE then
+
+            local limit = nil
+            if kind == "seaBeast" then
+                limit = SHARK_V3_SEABEAST_RANGE
+            elseif distanceLimited then
+                limit = SHARK_V3_EVENT_RANGE
+            end
+            if limit and (p.Position - r.Position).Magnitude > limit then
                 return false
             end
+
             SetAimbotTarget(p.Position)
             return true
         end)
@@ -2577,12 +2623,14 @@ local function SharkV3FightTarget(target, kind, hoverHeight, distanceLimited)
     SetAimbotTarget(false)
     SharkV3StopCharTween()
     SharkV3RemoveHover()
+    cancelProxyTween()
     return not SharkV3TargetAlive(target, kind)
 end
 
 local function SharkV3ScanCombatTarget()
-    -- Sea Beast always has priority and intentionally has NO distance cap.
-    local seaBeast = SharkV3GetSeaBeast()
+    -- Sea Beast has priority only when it is within 5000 studs.
+    -- Once selected, combat approaches it with the main V3 proxy tween.
+    local seaBeast = SharkV3GetSeaBeast(SHARK_V3_SEABEAST_RANGE)
     if seaBeast then
         return seaBeast, "seaBeast", 300, false
     end
